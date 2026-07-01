@@ -69,6 +69,43 @@ describe("paper price import preview", () => {
     });
   });
 
+  it("does not auto-match a paper code that only differs by case", () => {
+    const preview = createPaperPriceImportPreview({
+      rows: [
+        createPriceRow({
+          normalizedData: {
+            ...createPriceRow().normalizedData,
+            supplierShortName: "供应商A",
+            paperName: "105g高强瓦楞纸",
+            paperCode: "dc",
+            prices: [{ header: "3.8纸价", effectiveDate: "03-08", priceYuanPerTon: 3230 }],
+          },
+        }),
+      ],
+      existingMaterials: [
+        createMaterial({
+          id: "paper-upper",
+          paperCode: "DC",
+          paperEncoding: undefined,
+          factoryName: "供应商B",
+          name: "其他原纸",
+        }),
+      ],
+      confirmedMatchRules: [],
+    });
+
+    expect(preview.summary).toMatchObject({
+      updateCount: 0,
+      pendingCount: 0,
+      failedCount: 1,
+    });
+    expect(preview.rows[0]).toMatchObject({
+      rowStatus: "failed",
+      candidateMaterialIds: [],
+      errors: [{ field: "paperMaterialId", message: "无法关联原纸" }],
+    });
+  });
+
   it("puts duplicate paper encoding matches into pending instead of picking one", () => {
     const preview = createPaperPriceImportPreview({
       rows: [
