@@ -5,21 +5,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MasterDataPage from "@/app/(main)/master-data/page";
 import {
   confirmMasterDataImport,
+  listPaperMaterials,
   previewMasterDataImport,
 } from "@/server/actions/master-data-actions";
 
 const actionMocks = vi.hoisted(() => ({
   confirmMasterDataImport: vi.fn(),
+  listPaperMaterials: vi.fn(),
   previewMasterDataImport: vi.fn(),
 }));
 
 vi.mock("@/server/actions/master-data-actions", () => ({
   confirmMasterDataImport: actionMocks.confirmMasterDataImport,
+  listPaperMaterials: actionMocks.listPaperMaterials,
   previewMasterDataImport: actionMocks.previewMasterDataImport,
 }));
 
 const mockedPreviewMasterDataImport = vi.mocked(previewMasterDataImport);
 const mockedConfirmMasterDataImport = vi.mocked(confirmMasterDataImport);
+const mockedListPaperMaterials = vi.mocked(listPaperMaterials);
 
 const previewRows = [
   {
@@ -88,6 +92,7 @@ async function renderAndPreview() {
     ok: true,
     data: {
       batchId: "batch-1",
+      sourceType: "paper_code_table",
       summary: {
         newCount: 2,
         updateCount: 0,
@@ -115,6 +120,13 @@ describe("master data import page", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedListPaperMaterials.mockResolvedValue({
+      ok: true,
+      data: {
+        items: [],
+        total: 0,
+      },
+    });
   });
 
   it("renders paper code import entry, file selector and preview area", () => {

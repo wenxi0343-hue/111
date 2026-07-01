@@ -1,6 +1,9 @@
 import { pathToFileURL } from "node:url";
 
 import { checkDatabaseConnection } from "../src/db/index.ts";
+import { loadLocalEnv } from "./load-local-env.ts";
+
+loadLocalEnv();
 
 interface RunCheckDatabaseScriptOptions {
   check?: typeof checkDatabaseConnection;

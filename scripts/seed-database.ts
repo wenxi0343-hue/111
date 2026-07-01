@@ -1,6 +1,9 @@
 import { pathToFileURL } from "node:url";
 
 import { seedDatabase } from "../src/db/seeds/index.ts";
+import { loadLocalEnv } from "./load-local-env.ts";
+
+loadLocalEnv();
 
 interface RunSeedDatabaseScriptOptions {
   seed?: typeof seedDatabase;

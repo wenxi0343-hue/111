@@ -1,7 +1,10 @@
 import { Workbook } from "exceljs";
 import { describe, expect, it } from "vitest";
 
-import { parsePaperCodeWorkbook } from "@/modules/import-export/master-data-workbook-parser";
+import {
+  parsePaperCodeCsv,
+  parsePaperCodeWorkbook,
+} from "@/modules/import-export/master-data-workbook-parser";
 
 async function createPaperCodeWorkbookBuffer(): Promise<Buffer> {
   const workbook = new Workbook();
@@ -87,5 +90,44 @@ describe("master data workbook parser", () => {
       field: "gramWeightGsm",
       message: "克重不是有效数值",
     });
+  });
+
+  it("locates paper code table headers and normalizes rows from a csv file", async () => {
+    const csv = [
+      "说明,本行不是表头,,,",
+      "原纸代码,原纸编码,克重,原纸供应商简称,原纸名称",
+      "r2,B04033,105,供应商A,105g高强瓦楞纸",
+    ].join("\n");
+
+    const result = await parsePaperCodeCsv(csv);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error(result.error.message);
+    }
+
+    expect(result.data.header.sheetName).toBe("CSV");
+    expect(result.data.header.rowNumber).toBe(2);
+    expect(result.data.rows).toEqual([
+      {
+        sheetName: "CSV",
+        rowNumber: 3,
+        rawData: {
+          原纸代码: "r2",
+          原纸编码: "B04033",
+          克重: "105",
+          原纸供应商简称: "供应商A",
+          原纸名称: "105g高强瓦楞纸",
+        },
+        normalizedData: {
+          paperCode: "r2",
+          paperEncoding: "B04033",
+          gramWeightGsm: 105,
+          supplierShortName: "供应商A",
+          paperName: "105g高强瓦楞纸",
+        },
+        errors: [],
+      },
+    ]);
   });
 });

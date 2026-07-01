@@ -9,6 +9,9 @@ import type {
   MasterDataImportRowRecord,
   PaperFactoryRecord,
   PaperMaterialRecord,
+  PaperMaterialMatchRuleRecord,
+  PaperMaterialPriceHistoryRecord,
+  PaperQualityStandardRecord,
 } from "@/modules/master-data/import-commit";
 import {
   confirmMasterDataImport,
@@ -85,6 +88,9 @@ class InMemoryMasterDataImportRepository implements MasterDataImportRepository {
   factories: PaperFactoryRecord[] = [];
   materials: PaperMaterialRecord[] = [];
   changeLogs: MasterDataChangeLogRecord[] = [];
+  matchRules: PaperMaterialMatchRuleRecord[] = [];
+  priceHistories: PaperMaterialPriceHistoryRecord[] = [];
+  qualityStandards: PaperQualityStandardRecord[] = [];
 
   async transaction<T>(run: (repository: MasterDataImportRepository) => Promise<T>): Promise<T> {
     return run(this);
@@ -129,6 +135,36 @@ class InMemoryMasterDataImportRepository implements MasterDataImportRepository {
 
   async listImportRowsByBatchId(batchId: string): Promise<MasterDataImportRowRecord[]> {
     return this.rows.filter((row) => row.batchId === batchId);
+  }
+
+  async findImportRowById(input: {
+    batchId: string;
+    rowId: string;
+  }): Promise<MasterDataImportRowRecord | undefined> {
+    return this.rows.find((row) => row.batchId === input.batchId && row.id === input.rowId);
+  }
+
+  async updateImportRowMatch(input: {
+    batchId: string;
+    rowId: string;
+    targetMaterialId: string;
+    rowStatus: "update";
+  }): Promise<MasterDataImportRowRecord> {
+    const row = await this.findImportRowById(input);
+
+    if (!row) {
+      throw new Error("row not found");
+    }
+
+    row.rowStatus = input.rowStatus;
+    row.targetMaterialId = input.targetMaterialId;
+    row.errors = [];
+
+    return row;
+  }
+
+  async findPaperMaterialById(id: string): Promise<PaperMaterialRecord | undefined> {
+    return this.materials.find((material) => material.id === id);
   }
 
   async findPaperMaterialByCode(paperCode: string): Promise<PaperMaterialRecord | undefined> {
@@ -191,6 +227,48 @@ class InMemoryMasterDataImportRepository implements MasterDataImportRepository {
     this.materials[materialIndex] = nextMaterial;
 
     return nextMaterial;
+  }
+
+  async createMatchRule(
+    input: Omit<PaperMaterialMatchRuleRecord, "id" | "createdAt">,
+  ): Promise<PaperMaterialMatchRuleRecord> {
+    const rule = {
+      ...input,
+      id: `match-rule-${this.matchRules.length + 1}`,
+      createdAt: new Date("2026-06-30T00:00:00.000Z"),
+    };
+
+    this.matchRules.push(rule);
+
+    return rule;
+  }
+
+  async createPriceHistory(
+    input: Omit<PaperMaterialPriceHistoryRecord, "id" | "createdAt">,
+  ): Promise<PaperMaterialPriceHistoryRecord> {
+    const history = {
+      ...input,
+      id: `price-history-${this.priceHistories.length + 1}`,
+      createdAt: new Date("2026-06-30T00:00:00.000Z"),
+    };
+
+    this.priceHistories.push(history);
+
+    return history;
+  }
+
+  async createQualityStandard(
+    input: Omit<PaperQualityStandardRecord, "id" | "createdAt">,
+  ): Promise<PaperQualityStandardRecord> {
+    const standard = {
+      ...input,
+      id: `quality-standard-${this.qualityStandards.length + 1}`,
+      createdAt: new Date("2026-06-30T00:00:00.000Z"),
+    };
+
+    this.qualityStandards.push(standard);
+
+    return standard;
   }
 
   async createChangeLog(input: Omit<MasterDataChangeLogRecord, "id">): Promise<void> {

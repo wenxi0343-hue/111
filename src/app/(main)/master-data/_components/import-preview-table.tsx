@@ -24,7 +24,9 @@ export function ImportPreviewTable({ preview }: ImportPreviewTableProps) {
   const failedRows = rows.filter((row) => row.rowStatus === "failed");
   const newRows = rows.filter((row) => row.rowStatus === "new");
   const updateRows = rows.filter((row) => row.rowStatus === "update");
-  const incompleteRows = rows.filter((row) => row.completenessStatus === "incomplete");
+  const incompleteRows = rows.filter(
+    (row) => "completenessStatus" in row && row.completenessStatus === "incomplete",
+  );
 
   return (
     <section aria-label="导入预览" className={styles.previewRegion}>
@@ -99,14 +101,10 @@ function PreviewGroup({
               {rows.map((row) => (
                 <tr key={`${row.sheetName}-${row.rowNumber}-${row.rowStatus}`}>
                   <td>{row.rowNumber}</td>
-                  <td>{row.normalizedData.paperCode || "-"}</td>
-                  <td>{row.normalizedData.paperName || "-"}</td>
-                  <td>{row.factoryName || row.normalizedData.supplierShortName || "-"}</td>
-                  <td>
-                    {row.normalizedData.gramWeightGsm === undefined
-                      ? "-"
-                      : `${row.normalizedData.gramWeightGsm}g`}
-                  </td>
+                  <td>{getPreviewPaperCode(row)}</td>
+                  <td>{getPreviewPaperName(row)}</td>
+                  <td>{getPreviewSupplierName(row)}</td>
+                  <td>{getPreviewGramWeight(row)}</td>
                   <td>{formatRowMessages(row, showMissingFields)}</td>
                 </tr>
               ))}
@@ -120,13 +118,53 @@ function PreviewGroup({
   );
 }
 
+function getPreviewPaperCode(row: PreviewRow): string {
+  return "paperCode" in row.normalizedData ? row.normalizedData.paperCode || "-" : "-";
+}
+
+function getPreviewPaperName(row: PreviewRow): string {
+  if ("paperName" in row.normalizedData) {
+    return row.normalizedData.paperName || "-";
+  }
+
+  return "rawLabel" in row.normalizedData ? row.normalizedData.rawLabel || "-" : "-";
+}
+
+function getPreviewSupplierName(row: PreviewRow): string {
+  if ("factoryName" in row && row.factoryName) {
+    return row.factoryName;
+  }
+
+  return "supplierShortName" in row.normalizedData
+    ? row.normalizedData.supplierShortName || "-"
+    : "-";
+}
+
+function getPreviewGramWeight(row: PreviewRow): string {
+  if ("gramWeightGsm" in row.normalizedData && row.normalizedData.gramWeightGsm !== undefined) {
+    return `${row.normalizedData.gramWeightGsm}g`;
+  }
+
+  if (
+    "gramWeightMinGsm" in row.normalizedData &&
+    (row.normalizedData.gramWeightMinGsm !== undefined ||
+      row.normalizedData.gramWeightMaxGsm !== undefined)
+  ) {
+    return [row.normalizedData.gramWeightMinGsm, row.normalizedData.gramWeightMaxGsm]
+      .filter((value): value is number => value !== undefined)
+      .join("-");
+  }
+
+  return "-";
+}
+
 function formatRowMessages(row: PreviewRow, showMissingFields: boolean): string {
   const messages = [
     ...row.errors.map((error) => error.message),
-    ...row.warnings.map((warning) => warning.message),
+    ...("warnings" in row ? row.warnings.map((warning) => warning.message) : []),
   ];
 
-  if (showMissingFields) {
+  if (showMissingFields && "missingFields" in row) {
     messages.push(...row.missingFields.map((field) => `缺少${missingFieldLabels[field] ?? field}`));
   }
 

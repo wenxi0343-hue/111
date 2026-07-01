@@ -1,5 +1,9 @@
 import { defineConfig } from "drizzle-kit";
 
+import { loadLocalEnv } from "./scripts/load-local-env.ts";
+
+loadLocalEnv();
+
 export function createDrizzleConfig(databaseUrl: string | undefined) {
   if (!databaseUrl) {
     throw new Error("DATABASE_URL 未配置，请先配置数据连接信息。");
