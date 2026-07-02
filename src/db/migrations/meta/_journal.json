@@ -15,6 +15,13 @@
       "when": 1782745576761,
       "tag": "0001_special_sprite",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782963254506,
+      "tag": "0002_tense_ravenous",
+      "breakpoints": true
     }
   ]
 }

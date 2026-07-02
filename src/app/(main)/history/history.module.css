@@ -1,0 +1,174 @@
+.page {
+  display: grid;
+  gap: 18px;
+}
+
+.header {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.count {
+  background: #e8f3f6;
+  border: 1px solid #c7dce4;
+  border-radius: 6px;
+  color: var(--app-accent);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 9px;
+  white-space: nowrap;
+}
+
+.emptyState,
+.historyItem {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+}
+
+.emptyState {
+  color: var(--app-muted);
+  padding: 18px;
+}
+
+.historyList {
+  display: grid;
+  gap: 12px;
+}
+
+.historyItem {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.itemMain {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.itemMain h2 {
+  font-size: 17px;
+  line-height: 1.35;
+  margin: 0 0 4px;
+}
+
+.itemMain p {
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.statusBadge {
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 5px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.statusQualified {
+  background: #e9f7ef;
+  color: #17663a;
+}
+
+.statusRisk {
+  background: #fff1e8;
+  color: #9a3d10;
+}
+
+.statusNeutral {
+  background: #eef1f5;
+  color: #4b5563;
+}
+
+.meta {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  margin: 0;
+}
+
+.meta div {
+  display: grid;
+  gap: 4px;
+}
+
+.meta dt {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.meta dd {
+  font-size: 14px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.warnings {
+  border-top: 1px solid var(--app-border);
+  color: #9a3d10;
+  display: grid;
+  font-size: 13px;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 0 0 18px;
+}
+
+.exportLinks {
+  border-top: 1px solid var(--app-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.exportLinks a {
+  background: var(--app-accent);
+  border: 1px solid var(--app-accent);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  padding: 6px 10px;
+  text-decoration: none;
+}
+
+.exportLinks a:nth-child(2) {
+  background: var(--app-surface);
+  color: var(--app-accent);
+}
+
+.exportRecords {
+  color: var(--app-muted);
+  display: grid;
+  font-size: 13px;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (max-width: 640px) {
+  .header,
+  .itemMain {
+    display: grid;
+  }
+
+  .count,
+  .statusBadge {
+    justify-self: start;
+  }
+
+  .meta {
+    grid-template-columns: 1fr;
+  }
+}

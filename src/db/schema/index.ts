@@ -4,6 +4,7 @@ export {
   masterDataImportRows,
   paperMaterialMatchRules,
 } from "./master-data-imports.ts";
+export { matchingSchemes } from "./matching-schemes.ts";
 export { paperFactories } from "./paper-factories.ts";
 export {
   paperMaterialPriceHistories,
