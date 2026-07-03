@@ -21,6 +21,7 @@ import {
   createUnavailableReason,
 } from "./reason-messages";
 import type {
+  HistoricalHabitSelectionContext,
   RecommendationOptions,
   RecommendationSlot,
   RecommendationStrategy,
@@ -38,28 +39,37 @@ export function selectMatchingRecommendations(input: {
   evaluation: EvaluateMatchingCandidatesResult;
   parameters: CalculationParameters;
   options?: Partial<RecommendationOptions> | undefined;
+  historicalHabitContext?: HistoricalHabitSelectionContext | undefined;
 }): SelectMatchingRecommendationsResult {
-  const { evaluation, parameters, options = {} } = input;
+  const { evaluation, parameters, options = {}, historicalHabitContext } = input;
 
   if (evaluation.eligibleCandidates.length === 0) {
     return {
-      slots: createReferenceSlots(evaluation.rejectedCandidates),
+      slots: createReferenceSlots(evaluation.rejectedCandidates, historicalHabitContext),
       rejectedSummary: evaluation.rejectedSummary,
       rejectedCandidates: evaluation.rejectedCandidates,
-      globalMessages: [GLOBAL_REFERENCE_MESSAGE],
+      globalMessages: [
+        ...new Set([GLOBAL_REFERENCE_MESSAGE, ...(historicalHabitContext?.globalMessages ?? [])]),
+      ],
     };
   }
 
-  const economyCandidates = sortCandidatesByEconomy(evaluation.eligibleCandidates, parameters);
+  const economyCandidates = sortCandidatesByEconomy(
+    evaluation.eligibleCandidates,
+    parameters,
+    historicalHabitContext,
+  );
   const safetyCandidates = sortCandidatesBySafety(
     evaluation.eligibleCandidates,
     parameters,
     options,
+    historicalHabitContext,
   );
   const balancedCandidates = sortCandidatesByBalanced(
     evaluation.eligibleCandidates,
     parameters,
     options,
+    historicalHabitContext,
   );
   const usedFingerprintsByStrategy = new Map<string, RecommendationStrategy>();
 
@@ -72,6 +82,7 @@ export function selectMatchingRecommendations(input: {
         parameters,
         options,
         usedFingerprintsByStrategy,
+        historicalHabitContext,
       }),
       createRecommendedSlot({
         strategy: "safety",
@@ -80,6 +91,7 @@ export function selectMatchingRecommendations(input: {
         parameters,
         options,
         usedFingerprintsByStrategy,
+        historicalHabitContext,
       }),
       createRecommendedSlot({
         strategy: "balanced",
@@ -88,11 +100,12 @@ export function selectMatchingRecommendations(input: {
         parameters,
         options,
         usedFingerprintsByStrategy,
+        historicalHabitContext,
       }),
     ],
     rejectedSummary: evaluation.rejectedSummary,
     rejectedCandidates: evaluation.rejectedCandidates,
-    globalMessages: [],
+    globalMessages: historicalHabitContext?.globalMessages ?? [],
   };
 }
 
@@ -103,6 +116,7 @@ function createRecommendedSlot(input: {
   parameters: CalculationParameters;
   options: Partial<RecommendationOptions>;
   usedFingerprintsByStrategy: Map<string, RecommendationStrategy>;
+  historicalHabitContext?: HistoricalHabitSelectionContext | undefined;
 }): RecommendationSlot {
   const {
     strategy,
@@ -111,6 +125,7 @@ function createRecommendedSlot(input: {
     parameters,
     options,
     usedFingerprintsByStrategy,
+    historicalHabitContext,
   } = input;
   const selectedCandidate = candidates.find(
     (candidate) => !usedFingerprintsByStrategy.has(createCandidateFingerprint(candidate)),
@@ -131,6 +146,7 @@ function createRecommendedSlot(input: {
         messages: [REPEATED_RECOMMENDATION_MESSAGE],
         repeatedFrom: usedFingerprintsByStrategy.get(fingerprint),
         unavailableReasons: [],
+        historicalHabit: getHistoricalHabitInfo(repeatedCandidate, historicalHabitContext),
       };
     }
 
@@ -159,11 +175,13 @@ function createRecommendedSlot(input: {
     evaluation: selectedCandidate,
     messages: [],
     unavailableReasons: [],
+    historicalHabit: getHistoricalHabitInfo(selectedCandidate, historicalHabitContext),
   };
 }
 
 function createReferenceSlots(
   rejectedCandidates: RejectedCandidateEvaluation[],
+  historicalHabitContext?: HistoricalHabitSelectionContext | undefined,
 ): [RecommendationSlot, RecommendationSlot, RecommendationSlot] {
   const usedFingerprints = new Set<string>();
 
@@ -174,6 +192,7 @@ function createReferenceSlots(
         .filter((candidate) => hasDisplayableReference(candidate) && Boolean(candidate.cost))
         .sort((first, second) => first.cost!.taxIncludedCostYuan - second.cost!.taxIncludedCostYuan),
       usedFingerprints,
+      historicalHabitContext,
     ),
     createReferenceSlot(
       "safety",
@@ -181,6 +200,7 @@ function createReferenceSlots(
         .filter((candidate) => hasDisplayableReference(candidate) && Boolean(candidate.strength))
         .sort((first, second) => second.strength!.bctN - first.strength!.bctN),
       usedFingerprints,
+      historicalHabitContext,
     ),
     createReferenceSlot(
       "balanced",
@@ -199,6 +219,7 @@ function createReferenceSlots(
           return first.cost!.taxIncludedCostYuan - second.cost!.taxIncludedCostYuan;
         }),
       usedFingerprints,
+      historicalHabitContext,
     ),
   ];
 }
@@ -207,6 +228,7 @@ function createReferenceSlot(
   strategy: RecommendationStrategy,
   candidates: RejectedCandidateEvaluation[],
   usedFingerprints: Set<string>,
+  historicalHabitContext?: HistoricalHabitSelectionContext | undefined,
 ): RecommendationSlot {
   const selectedCandidate =
     candidates.find((candidate) => !usedFingerprints.has(createCandidateFingerprint(candidate))) ??
@@ -239,7 +261,21 @@ function createReferenceSlot(
     evaluation: selectedCandidate,
     messages: [],
     unavailableReasons: selectedCandidate.reasons,
+    historicalHabit: getHistoricalHabitInfo(selectedCandidate, historicalHabitContext),
   };
+}
+
+function getHistoricalHabitInfo(
+  evaluation: EligibleCandidateEvaluation | RejectedCandidateEvaluation | undefined,
+  historicalHabitContext: HistoricalHabitSelectionContext | undefined,
+) {
+  if (!evaluation || !historicalHabitContext) {
+    return undefined;
+  }
+
+  return historicalHabitContext.historicalHabitByCandidateFingerprint[
+    createCandidateFingerprint(evaluation)
+  ];
 }
 
 function createUnavailableReasons(input: {

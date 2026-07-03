@@ -1,0 +1,2 @@
+CREATE INDEX "historical_order_habit_summaries_batch_dimension_idx" ON "historical_order_habit_summaries" USING btree ("import_batch_id","dimension_type","dimension_key","order_count");--> statement-breakpoint
+CREATE INDEX "historical_orders_batch_statistical_idx" ON "historical_orders" USING btree ("import_batch_id","is_statistical");

@@ -2,9 +2,15 @@ import type {
   CalculationParameters,
   CandidateEvaluation,
   EligibleCandidateEvaluation,
+  MatchingCandidate,
 } from "@/modules/calculations/types";
 
-import type { BalancedCandidateScore, RecommendationOptions } from "./types";
+import type {
+  BalancedCandidateScore,
+  HistoricalHabitSelectionContext,
+  RecommendationHistoricalHabitInfo,
+  RecommendationOptions,
+} from "./types";
 
 const COST_EPSILON = 0.0001;
 
@@ -15,10 +21,14 @@ const DEFAULT_RECOMMENDATION_OPTIONS: RecommendationOptions = {
 };
 
 export function createCandidateFingerprint(evaluation: CandidateEvaluation): string {
+  return createMatchingCandidateFingerprint(evaluation.candidate);
+}
+
+export function createMatchingCandidateFingerprint(candidate: MatchingCandidate): string {
   return [
-    evaluation.candidate.layerCount,
-    evaluation.candidate.fluteType,
-    ...evaluation.candidate.layers.map((layer) =>
+    candidate.layerCount,
+    candidate.fluteType,
+    ...candidate.layers.map((layer) =>
       [layer.role, layer.flute ?? "", layer.paper.id].join(":"),
     ),
   ].join("|");
@@ -40,8 +50,10 @@ export function calculateSafetySurplusRate(
 export function sortCandidatesByEconomy(
   evaluations: EligibleCandidateEvaluation[],
   parameters: CalculationParameters,
+  historicalHabitContext?: HistoricalHabitSelectionContext | undefined,
 ): EligibleCandidateEvaluation[] {
-  return [...evaluations].sort((first, second) => {
+  return sortHistoricalMatchesFirst(evaluations, historicalHabitContext, (items) =>
+    [...items].sort((first, second) => {
     const costDifference = first.cost.taxIncludedCostYuan - second.cost.taxIncludedCostYuan;
 
     if (Math.abs(costDifference) >= COST_EPSILON) {
@@ -57,22 +69,25 @@ export function sortCandidatesByEconomy(
     }
 
     return compareByFingerprint(first, second);
-  });
+    }),
+  );
 }
 
 export function sortCandidatesBySafety(
   evaluations: EligibleCandidateEvaluation[],
   parameters: CalculationParameters,
   options: Partial<RecommendationOptions> = {},
+  historicalHabitContext?: HistoricalHabitSelectionContext | undefined,
 ): EligibleCandidateEvaluation[] {
   const resolvedOptions = resolveRecommendationOptions(options);
 
-  return evaluations
+  const candidatesUnderLimit = evaluations
     .filter(
       (evaluation) =>
         calculateSafetySurplusRate(evaluation, parameters) <= resolvedOptions.maxSafetySurplusRate,
     )
-    .sort((first, second) => {
+  return sortHistoricalMatchesFirst(candidatesUnderLimit, historicalHabitContext, (items) =>
+    [...items].sort((first, second) => {
       const surplusDifference =
         calculateSafetySurplusRate(second, parameters) - calculateSafetySurplusRate(first, parameters);
 
@@ -87,15 +102,26 @@ export function sortCandidatesBySafety(
       }
 
       return compareByFingerprint(first, second);
-    });
+    }),
+  );
 }
 
 export function scoreBalancedCandidates(
   evaluations: EligibleCandidateEvaluation[],
   parameters: CalculationParameters,
   options: Partial<RecommendationOptions> = {},
+  historicalHabitContext?: HistoricalHabitSelectionContext | undefined,
 ): BalancedCandidateScore[] {
-  const resolvedOptions = resolveRecommendationOptions(options);
+  const resolvedOptions = resolveRecommendationOptions(
+    historicalHabitContext
+      ? {
+          balancedCostWeight: 0.3,
+          balancedSafetyWeight: 0.3,
+          historicalHabitWeight: 0.4,
+          ...options,
+        }
+      : options,
+  );
   const costs = evaluations.map((evaluation) => evaluation.cost.taxIncludedCostYuan);
   const cappedSurplusRates = evaluations.map((evaluation) =>
     Math.min(
@@ -115,14 +141,19 @@ export function scoreBalancedCandidates(
       maxCost,
     );
     const safetyScore = normalizeScore(cappedSurplusRates[index] ?? 0, minSurplusRate, maxSurplusRate);
+    const historicalHabitScore = historicalHabitContext
+      ? getHistoricalHabitScore(evaluation, historicalHabitContext)
+      : undefined;
 
     return {
       evaluation,
       costScore,
       safetyScore,
+      historicalHabitScore,
       balancedScore:
         costScore * resolvedOptions.balancedCostWeight +
-        safetyScore * resolvedOptions.balancedSafetyWeight,
+        safetyScore * resolvedOptions.balancedSafetyWeight +
+        (historicalHabitScore ?? 0) * (resolvedOptions.historicalHabitWeight ?? 0),
     };
   });
 }
@@ -131,8 +162,9 @@ export function sortCandidatesByBalanced(
   evaluations: EligibleCandidateEvaluation[],
   parameters: CalculationParameters,
   options: Partial<RecommendationOptions> = {},
+  historicalHabitContext?: HistoricalHabitSelectionContext | undefined,
 ): EligibleCandidateEvaluation[] {
-  return scoreBalancedCandidates(evaluations, parameters, options)
+  return scoreBalancedCandidates(evaluations, parameters, options, historicalHabitContext)
     .sort((first, second) => {
       const scoreDifference = second.balancedScore - first.balancedScore;
 
@@ -159,6 +191,75 @@ function resolveRecommendationOptions(
     ...DEFAULT_RECOMMENDATION_OPTIONS,
     ...options,
   };
+}
+
+function sortHistoricalMatchesFirst(
+  evaluations: EligibleCandidateEvaluation[],
+  historicalHabitContext: HistoricalHabitSelectionContext | undefined,
+  sort: (items: EligibleCandidateEvaluation[]) => EligibleCandidateEvaluation[],
+): EligibleCandidateEvaluation[] {
+  if (!historicalHabitContext || historicalHabitContext.status !== "available") {
+    return sort(evaluations);
+  }
+
+  const historicalMatches = evaluations.filter((evaluation) =>
+    hasHistoricalHabitMatch(evaluation, historicalHabitContext),
+  );
+  const otherCandidates = evaluations.filter(
+    (evaluation) => !hasHistoricalHabitMatch(evaluation, historicalHabitContext),
+  );
+
+  if (historicalMatches.length === 0) {
+    return sort(evaluations);
+  }
+
+  return [...sort(historicalMatches), ...sort(otherCandidates)];
+}
+
+function hasHistoricalHabitMatch(
+  evaluation: EligibleCandidateEvaluation,
+  historicalHabitContext: HistoricalHabitSelectionContext,
+): boolean {
+  const info =
+    historicalHabitContext.historicalHabitByCandidateFingerprint[
+      createMatchingCandidateFingerprint(evaluation.candidate)
+    ];
+
+  return info !== undefined && info.level !== "insufficient";
+}
+
+function getHistoricalHabitScore(
+  evaluation: EligibleCandidateEvaluation,
+  historicalHabitContext: HistoricalHabitSelectionContext,
+): number {
+  const info =
+    historicalHabitContext.historicalHabitByCandidateFingerprint[
+      createMatchingCandidateFingerprint(evaluation.candidate)
+    ];
+
+  return getHistoricalHabitLevelScore(info);
+}
+
+function getHistoricalHabitLevelScore(
+  info: RecommendationHistoricalHabitInfo | undefined,
+): number {
+  if (!info) {
+    return 0;
+  }
+
+  if (info.level === "high") {
+    return 1;
+  }
+
+  if (info.level === "medium") {
+    return 0.65;
+  }
+
+  if (info.level === "low") {
+    return 0.2;
+  }
+
+  return 0;
 }
 
 function normalizeInvertedScore(value: number, min: number, max: number): number {

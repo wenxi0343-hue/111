@@ -12,7 +12,9 @@ import type {
   RejectedCandidateEvaluation,
   StrengthResult,
 } from "@/modules/calculations/types";
+import { createMatchingCandidateFingerprint } from "@/modules/recommendation/scoring";
 import { selectMatchingRecommendations } from "@/modules/recommendation/select-matching-recommendations";
+import type { RecommendationHistoricalHabitInfo } from "@/modules/recommendation/types";
 
 function createLayer(overrides: Partial<CandidateLayer>): CandidateLayer {
   return {
@@ -281,6 +283,55 @@ describe("selectMatchingRecommendations", () => {
     expect(result.slots[1].evaluation?.candidate.id).not.toBe("rejected-high-safety");
   });
 
+  it("attaches historical habit info to selected historical candidates", () => {
+    const historical = createEligibleEvaluation({ id: "historical", costYuan: 2.3, bctN: 640 });
+    const defaultCandidate = createEligibleEvaluation({
+      id: "default-candidate",
+      costYuan: 2.1,
+      bctN: 640,
+    });
+
+    const result = selectMatchingRecommendations({
+      evaluation: createEvaluationResult({
+        eligibleCandidates: [defaultCandidate, historical],
+      }),
+      parameters: DEFAULT_CALCULATION_PARAMETERS,
+      historicalHabitContext: createHistoricalSelectionContext([historical]),
+    });
+
+    expect(result.slots[0].evaluation?.candidate.id).toBe("historical");
+    expect(result.slots[0].historicalHabit?.label).toBe("高匹配");
+  });
+
+  it("does not select rejected historical candidates as official recommendations", () => {
+    const eligibleDefault = createEligibleEvaluation({
+      id: "eligible-default",
+      costYuan: 2.3,
+      bctN: 640,
+    });
+    const rejectedHistorical = createRejectedEvaluation({
+      id: "rejected-historical",
+      costYuan: 2.1,
+      bctN: 760,
+    });
+
+    const result = selectMatchingRecommendations({
+      evaluation: createEvaluationResult({
+        eligibleCandidates: [eligibleDefault],
+        rejectedCandidates: [rejectedHistorical],
+      }),
+      parameters: DEFAULT_CALCULATION_PARAMETERS,
+      historicalHabitContext: createHistoricalSelectionContextFromCandidates([
+        rejectedHistorical.candidate,
+      ]),
+    });
+
+    expect(result.slots.every((slot) => slot.evaluation?.candidate.id !== "rejected-historical")).toBe(
+      true,
+    );
+    expect(result.slots.every((slot) => slot.evaluation?.status !== "rejected")).toBe(true);
+  });
+
   it("does not include historical habit or AI generated fields", () => {
     const economy = createEligibleEvaluation({ id: "economy", costYuan: 2.1, bctN: 520 });
     const safety = createEligibleEvaluation({ id: "safety", costYuan: 2.5, bctN: 760 });
@@ -495,3 +546,29 @@ describe("selectMatchingRecommendations", () => {
     );
   });
 });
+
+function createHistoricalSelectionContext(evaluations: EligibleCandidateEvaluation[]) {
+  return createHistoricalSelectionContextFromCandidates(
+    evaluations.map((evaluation) => evaluation.candidate),
+  );
+}
+
+function createHistoricalSelectionContextFromCandidates(candidates: MatchingCandidate[]) {
+  const historicalHabitByCandidateFingerprint: Record<string, RecommendationHistoricalHabitInfo> = {};
+
+  for (const candidate of candidates) {
+    historicalHabitByCandidateFingerprint[createMatchingCandidateFingerprint(candidate)] = {
+      level: "high",
+      label: "高匹配",
+      reasons: ["相似历史订单中该组合常用"],
+      evidences: [],
+      conflictMessages: [],
+    };
+  }
+
+  return {
+    status: "available" as const,
+    historicalHabitByCandidateFingerprint,
+    globalMessages: [],
+  };
+}

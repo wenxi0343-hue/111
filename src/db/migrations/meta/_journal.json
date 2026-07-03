@@ -22,6 +22,20 @@
       "when": 1782963254506,
       "tag": "0002_tense_ravenous",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783042430043,
+      "tag": "0003_curious_maginty",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783063237308,
+      "tag": "0004_fantastic_eddie_brock",
+      "breakpoints": true
     }
   ]
 }

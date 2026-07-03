@@ -9,7 +9,12 @@ import {
   type MatchingSchemeHistorySummary,
 } from "@/server/actions/matching-scheme-history";
 
+import { HistoricalOrderImportPanel } from "./_components/historical-order-import-panel";
 import styles from "./history.module.css";
+import {
+  listHistoricalOrderHabitSummaries,
+} from "@/server/actions/historical-order-actions";
+import type { ListHistoricalOrderHabitSummariesResult } from "@/modules/historical-orders/list-habit-summaries";
 
 const finalStatusLabels: Record<string, string> = {
   qualified: "达标 / 可生产",
@@ -21,9 +26,17 @@ const finalStatusLabels: Record<string, string> = {
 
 export default async function HistoryPage() {
   const historyResult = await loadRecentHistory();
+  const habitSummaryResult = await listHistoricalOrderHabitSummaries({ limit: 30 });
 
   return (
     <section className={`page-section ${styles.page}`}>
+      <HistoricalOrderImportPanel />
+
+      <HistoricalOrderHabitSummarySection
+        summaries={habitSummaryResult.ok ? habitSummaryResult.data.items : []}
+        unavailable={!habitSummaryResult.ok}
+      />
+
       <header className={styles.header}>
         <div>
           <h1>历史方案</h1>
@@ -95,6 +108,106 @@ export default async function HistoryPage() {
       )}
     </section>
   );
+}
+
+function HistoricalOrderHabitSummarySection({
+  summaries,
+  unavailable,
+}: {
+  summaries: ListHistoricalOrderHabitSummariesResult["items"];
+  unavailable: boolean;
+}) {
+  const productSummaries = summaries.filter((summary) => summary.dimensionType === "product");
+  const sizeSummaries = summaries.filter((summary) => summary.dimensionType === "size_bucket");
+  const weightSummaries = summaries.filter((summary) => summary.dimensionType === "weight_bucket");
+
+  return (
+    <section aria-label="历史配纸习惯摘要" className={styles.habitSummarySection}>
+      <div className={styles.habitSummaryHeading}>
+        <h2>历史配纸习惯摘要</h2>
+        <p>按已确认导入的可统计订单汇总常用组合，仅作为后续经验参考。</p>
+      </div>
+
+      {unavailable ? (
+        <div className={styles.emptyState}>历史配纸习惯摘要暂时无法读取。</div>
+      ) : summaries.length === 0 ? (
+        <div className={styles.emptyState}>暂无历史配纸习惯摘要。</div>
+      ) : (
+        <div className={styles.habitSummaryGrid}>
+          <HabitSummaryGroup title="产品习惯" items={productSummaries} />
+          <HabitSummaryGroup title="尺寸区间习惯" items={sizeSummaries} />
+          <HabitSummaryGroup title="重量区间习惯" items={weightSummaries} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HabitSummaryGroup({
+  title,
+  items,
+}: {
+  title: string;
+  items: ListHistoricalOrderHabitSummariesResult["items"];
+}) {
+  return (
+    <section className={styles.habitSummaryGroup}>
+      <h3>{title}</h3>
+      {items.length === 0 ? (
+        <p className={styles.groupEmpty}>暂无记录</p>
+      ) : (
+        <ul className={styles.habitSummaryList}>
+          {items.map((item) => (
+            <li key={`${item.dimensionType}-${item.dimensionKey}-${item.layerCount}-${item.flute}`}>
+              <div className={styles.habitSummaryMain}>
+                <strong>{item.dimensionKey}</strong>
+                <span>{formatHabitCombination(item)}</span>
+              </div>
+              <dl className={styles.habitSummaryMeta}>
+                <div>
+                  <dt>纸厂</dt>
+                  <dd>{item.factoryNames.length > 0 ? item.factoryNames.join(" / ") : "-"}</dd>
+                </div>
+                <div>
+                  <dt>克重</dt>
+                  <dd>{formatGramWeights(item.gramWeights)}</dd>
+                </div>
+                <div>
+                  <dt>次数</dt>
+                  <dd>{item.orderCount} 次</dd>
+                </div>
+                <div>
+                  <dt>频率</dt>
+                  <dd>{formatFrequency(item.frequency)}</dd>
+                </div>
+              </dl>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function formatHabitCombination(
+  item: ListHistoricalOrderHabitSummariesResult["items"][number],
+): string {
+  const layerText = item.layerCount !== undefined ? `${item.layerCount} 层` : "层数未识别";
+  const fluteText = item.flute ? `${item.flute} 瓦` : "瓦型未识别";
+
+  return `${layerText} / ${fluteText}`;
+}
+
+function formatGramWeights(gramWeights: number[]): string {
+  if (gramWeights.length === 0) {
+    return "-";
+  }
+
+  return gramWeights.map((gramWeight) => `${gramWeight}g`).join(" / ");
+}
+
+function formatFrequency(frequency: number): string {
+  return `${Math.round(frequency * 100)}%`;
 }
 
 async function loadRecentHistory() {

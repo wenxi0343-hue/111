@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createSessionValue } from "@/modules/auth/session";
 import type { BoxSpecInput } from "@/modules/box-spec/types";
+import type { HistoricalHabitRecommendationContext } from "@/modules/historical-orders/recommendation-context";
+import type { HistoricalOrderHabitSummaryItem } from "@/modules/historical-orders/list-habit-summaries";
 import type {
   ListRecommendablePaperMaterialsRepository,
   RecommendablePaperMaterial,
@@ -19,6 +21,7 @@ import type {
   StrengthResult,
 } from "@/modules/calculations/types";
 import type { RecommendationSlot } from "@/modules/recommendation/types";
+import { createMatchingCandidateFingerprint } from "@/modules/recommendation/scoring";
 import {
   MATCHING_BASE_DATA_ERROR_MESSAGE,
   checkMatchingReadinessFromRepository,
@@ -394,6 +397,41 @@ function createDataMissingEvaluation(candidate: MatchingCandidate): RejectedCand
   };
 }
 
+function createHistoricalSummary(
+  overrides: Partial<HistoricalOrderHabitSummaryItem> = {},
+): HistoricalOrderHabitSummaryItem {
+  return {
+    importBatchId: "batch-1",
+    dimensionType: "product",
+    dimensionKey: "食品",
+    layerCount: 3,
+    flute: "B",
+    factoryNames: ["脱敏纸厂A"],
+    gramWeights: [230, 160],
+    orderCount: 8,
+    frequency: 0.62,
+    ...overrides,
+  };
+}
+
+function createHistoricalHabitContext(
+  overrides: Partial<HistoricalHabitRecommendationContext> = {},
+): HistoricalHabitRecommendationContext {
+  return {
+    status: "available",
+    importBatchId: "batch-1",
+    matchedDimensionKeys: {
+      productKey: "食品",
+      sizeBucketKey: "小箱",
+      weightBucketKey: "≤20kg",
+    },
+    similarOrderCount: 8,
+    summaries: [createHistoricalSummary()],
+    messages: [],
+    ...overrides,
+  };
+}
+
 describe("matching readiness check", () => {
   it("passes when paper factories, liner paper, corrugating paper, and formula parameters are ready", async () => {
     const readiness = createReadiness();
@@ -448,12 +486,14 @@ describe("generate matching scheme action", () => {
   it("requires authentication before running the matching flow", async () => {
     const readinessRepository = new InMemoryMatchingReadinessRepository(createReadiness());
     const selectMatchingRecommendationsFn = vi.fn();
+    const getHistoricalHabitContextFn = vi.fn();
 
     const result = await generateMatchingScheme(createValidInput(), {
       env: validEnv,
       cookieStore: { get: () => undefined },
       readinessRepository,
       selectMatchingRecommendationsFn,
+      getHistoricalHabitContextFn,
       now: new Date("2026-07-01T00:00:00.000Z"),
     });
 
@@ -466,6 +506,7 @@ describe("generate matching scheme action", () => {
     });
     expect(readinessRepository.callCount).toBe(0);
     expect(selectMatchingRecommendationsFn).not.toHaveBeenCalled();
+    expect(getHistoricalHabitContextFn).not.toHaveBeenCalled();
   });
 
   it("returns normalized input and excludes stacking when stacking layers are blank", async () => {
@@ -579,7 +620,8 @@ describe("generate matching scheme action", () => {
     expect(result.data.recommendationSlots.every((slot) => slot.isOfficialRecommendation)).toBe(
       true,
     );
-    expect(result.data.recommendationMessages).toEqual([]);
+    expect(result.data.recommendationMessages).toEqual(["暂无足够历史参考"]);
+    expect(result.data.historicalHabitStatus).toBe("unavailable");
     const serializedResult = JSON.stringify(result.data);
     expect(serializedResult).not.toContain("historicalHabitScore");
     expect(serializedResult).not.toContain("historicalReason");
@@ -636,6 +678,125 @@ describe("generate matching scheme action", () => {
     );
   });
 
+  it("automatically reads available historical habits and evaluates merged historical candidates", async () => {
+    const defaultCandidate = createCandidate("default");
+    const historicalCandidate = createCandidate("historical");
+    const historicalSummary = createHistoricalSummary();
+    const getHistoricalHabitContextFn = vi.fn().mockResolvedValue(
+      createHistoricalHabitContext({
+        status: "available",
+        summaries: [historicalSummary],
+      }),
+    );
+    const createHistoricalHabitCandidatesFn = vi.fn().mockReturnValue({
+      candidates: [historicalCandidate, defaultCandidate],
+      historicalCandidates: [historicalCandidate],
+      unavailableRecords: [],
+      evidenceByCandidateFingerprint: {
+        [createMatchingCandidateFingerprint(historicalCandidate)]: [
+          { summary: historicalSummary, notices: [] },
+        ],
+      },
+      messages: [],
+      notices: [],
+    });
+    const evaluateMatchingCandidatesFn = vi.fn(({ candidates }) => ({
+      eligibleCandidates: candidates.map((candidate: MatchingCandidate, index: number) =>
+        createEligibleEvaluation({
+          candidate,
+          costYuan: index === 0 ? 2.3 : 2.1,
+          bctN: 640,
+        }),
+      ),
+      rejectedCandidates: [],
+      rejectedSummary: [],
+    }));
+
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository([
+        createRecommendablePaperMaterial("liner", { paperKind: "linerboard" }),
+        createRecommendablePaperMaterial("corrugating", {
+          paperKind: "corrugating",
+          applicableFlutes: ["B"],
+        }),
+      ]),
+      createCandidates: () => [defaultCandidate],
+      getHistoricalHabitContextFn,
+      createHistoricalHabitCandidatesFn,
+      evaluateMatchingCandidatesFn,
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("matching action should succeed");
+    }
+
+    expect(result.data.historicalHabitStatus).toBe("available");
+    expect(getHistoricalHabitContextFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boxSpec: expect.objectContaining({ productType: "食品" }),
+      }),
+    );
+    expect(createHistoricalHabitCandidatesFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        historicalHabitContext: expect.objectContaining({ status: "available" }),
+        defaultCandidates: [defaultCandidate],
+      }),
+    );
+    expect(evaluateMatchingCandidatesFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        candidates: [historicalCandidate, defaultCandidate],
+      }),
+    );
+    expect(result.data.recommendationSlots[0].evaluation?.candidate.id).toBe("historical");
+    expect(result.data.recommendationSlots[0].historicalHabit?.label).toBe("高匹配");
+  });
+
+  it("returns insufficient historical habit status while keeping three recommendation slots", async () => {
+    const defaultCandidate = createCandidate("default");
+    const getHistoricalHabitContextFn = vi.fn().mockResolvedValue(
+      createHistoricalHabitContext({
+        status: "insufficient",
+        similarOrderCount: 4,
+        summaries: [],
+        messages: ["暂无足够历史参考"],
+      }),
+    );
+
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+      createCandidates: () => [defaultCandidate],
+      getHistoricalHabitContextFn,
+      evaluateMatchingCandidatesFn: vi.fn().mockReturnValue({
+        eligibleCandidates: [
+          createEligibleEvaluation({
+            candidate: defaultCandidate,
+            costYuan: 2.1,
+            bctN: 640,
+          }),
+        ],
+        rejectedCandidates: [],
+        rejectedSummary: [],
+      }),
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("matching action should succeed");
+    }
+
+    expect(result.data.historicalHabitStatus).toBe("insufficient");
+    expect(result.data.recommendationSlots).toHaveLength(3);
+  });
+
   it("does not read papers or evaluate candidates when readiness checks fail", async () => {
     const paperMaterialRepository = new InMemoryPaperMaterialRepository();
     const evaluateMatchingCandidatesFn = vi.fn();
@@ -664,6 +825,7 @@ describe("generate matching scheme action", () => {
     const paperMaterialRepository = new InMemoryPaperMaterialRepository();
     const evaluateMatchingCandidatesFn = vi.fn();
     const selectMatchingRecommendationsFn = vi.fn();
+    const getHistoricalHabitContextFn = vi.fn();
 
     const result = await generateMatchingScheme(createValidInput({ lengthMm: "" }), {
       env: validEnv,
@@ -672,6 +834,7 @@ describe("generate matching scheme action", () => {
       paperMaterialRepository,
       evaluateMatchingCandidatesFn,
       selectMatchingRecommendationsFn,
+      getHistoricalHabitContextFn,
       now: new Date("2026-07-01T00:00:00.000Z"),
     });
 
@@ -694,6 +857,7 @@ describe("generate matching scheme action", () => {
     expect(paperMaterialRepository.callCount).toBe(0);
     expect(evaluateMatchingCandidatesFn).not.toHaveBeenCalled();
     expect(selectMatchingRecommendationsFn).not.toHaveBeenCalled();
+    expect(getHistoricalHabitContextFn).not.toHaveBeenCalled();
   });
 
   it("returns a field error when length is smaller than width", async () => {

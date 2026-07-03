@@ -15,14 +15,31 @@ import type {
   RejectedCandidateSummary,
   SingleFluteType,
 } from "@/modules/calculations/types";
+import { getHistoricalOrderWeightBucket } from "@/modules/historical-orders/habit-summary";
+import {
+  createDrizzleHistoricalHabitRecommendationRepository,
+  getHistoricalHabitRecommendationContext,
+  type HistoricalHabitRecommendationContext,
+  type HistoricalHabitRecommendationRepository,
+} from "@/modules/historical-orders/recommendation-context";
 import {
   createDrizzleListRecommendablePaperMaterialsRepository,
   listRecommendablePaperMaterialsFromRepository,
   type ListRecommendablePaperMaterialsRepository,
   type RecommendablePaperMaterial,
 } from "@/modules/master-data/list-recommendable-paper-materials";
+import {
+  createHistoricalHabitMatchingCandidates,
+  type HistoricalHabitCandidateGenerationResult,
+} from "@/modules/recommendation/historical-habit-candidates";
+import {
+  createHistoricalHabitConflictMessages,
+  createRecommendationHistoricalHabitInfo,
+} from "@/modules/recommendation/historical-habit-matching";
+import { createMatchingCandidateFingerprint } from "@/modules/recommendation/scoring";
 import { selectMatchingRecommendations } from "@/modules/recommendation/select-matching-recommendations";
 import type {
+  HistoricalHabitSelectionContext,
   RecommendationSlot,
   RecommendationStrategy,
   SelectMatchingRecommendationsResult,
@@ -63,6 +80,20 @@ interface MatchingActionOptions {
   readinessRepository?: MatchingReadinessRepository;
   paperMaterialRepository?: ListRecommendablePaperMaterialsRepository;
   createCandidates?: ((materials: RecommendablePaperMaterial[]) => MatchingCandidate[]) | undefined;
+  historicalHabitRepository?: HistoricalHabitRecommendationRepository | undefined;
+  getHistoricalHabitContextFn?:
+    | ((input: {
+        repository: HistoricalHabitRecommendationRepository;
+        boxSpec: NormalizedBoxSpec;
+      }) => Promise<HistoricalHabitRecommendationContext>)
+    | undefined;
+  createHistoricalHabitCandidatesFn?:
+    | ((input: {
+        historicalHabitContext: HistoricalHabitRecommendationContext;
+        materials: RecommendablePaperMaterial[];
+        defaultCandidates?: MatchingCandidate[] | undefined;
+      }) => HistoricalHabitCandidateGenerationResult)
+    | undefined;
   evaluateMatchingCandidatesFn?:
     | ((input: {
         boxSpec: NormalizedBoxSpec;
@@ -73,6 +104,7 @@ interface MatchingActionOptions {
     | ((input: {
         evaluation: EvaluateMatchingCandidatesResult;
         parameters: typeof DEFAULT_CALCULATION_PARAMETERS;
+        historicalHabitContext?: HistoricalHabitSelectionContext | undefined;
       }) => SelectMatchingRecommendationsResult)
     | undefined;
   historyRepository?: MatchingSchemeHistoryRepository | undefined;
@@ -107,6 +139,7 @@ export interface GenerateMatchingSchemeResult {
   recommendationMessages: string[];
   rejectedSummary: RejectedCandidateSummary[];
   rejectedCandidates: RejectedCandidateEvaluation[];
+  historicalHabitStatus: HistoricalHabitRecommendationContext["status"];
 }
 
 export interface SaveConfirmedMatchingSchemeResult {
@@ -230,18 +263,36 @@ export async function generateMatchingScheme(
     const paperMaterials = await listRecommendablePaperMaterialsFromRepository({
       repository: repositoryContext.data.paperMaterialRepository,
     });
-    const candidates = (options.createCandidates ?? createDefaultMatchingCandidates)(
+    const defaultCandidates = (options.createCandidates ?? createDefaultMatchingCandidates)(
       paperMaterials.items,
     );
+    const historicalHabitContext = await readHistoricalHabitContext({
+      repository: repositoryContext.data.historicalHabitRepository,
+      boxSpec: validationResult.data,
+      options,
+    });
+    const historicalCandidateGeneration = (
+      options.createHistoricalHabitCandidatesFn ?? createHistoricalHabitMatchingCandidates
+    )({
+      historicalHabitContext,
+      materials: paperMaterials.items,
+      defaultCandidates,
+    });
     const evaluation = (options.evaluateMatchingCandidatesFn ?? evaluateMatchingCandidates)({
       boxSpec: validationResult.data,
-      candidates,
+      candidates: historicalCandidateGeneration.candidates,
+    });
+    const historicalHabitSelectionContext = createHistoricalHabitSelectionContext({
+      historicalHabitContext,
+      historicalCandidateGeneration,
+      evaluation,
     });
     const recommendationResult = (
       options.selectMatchingRecommendationsFn ?? selectMatchingRecommendations
     )({
       evaluation,
       parameters: DEFAULT_CALCULATION_PARAMETERS,
+      historicalHabitContext: historicalHabitSelectionContext,
     });
 
     return {
@@ -254,6 +305,7 @@ export async function generateMatchingScheme(
         recommendationMessages: recommendationResult.globalMessages,
         rejectedSummary: recommendationResult.rejectedSummary,
         rejectedCandidates: recommendationResult.rejectedCandidates,
+        historicalHabitStatus: historicalHabitContext.status,
       },
     };
   } finally {
@@ -493,9 +545,11 @@ function createMatchingRepositoryContext({
   env = process.env,
   paperMaterialRepository,
   readinessRepository,
+  historicalHabitRepository,
 }: MatchingActionOptions): ActionResult<{
   repository: MatchingReadinessRepository;
   paperMaterialRepository: ListRecommendablePaperMaterialsRepository;
+  historicalHabitRepository: HistoricalHabitRecommendationRepository;
   close?: (() => Promise<void>) | undefined;
 }> {
   if (readinessRepository && paperMaterialRepository) {
@@ -504,6 +558,8 @@ function createMatchingRepositoryContext({
       data: {
         repository: readinessRepository,
         paperMaterialRepository,
+        historicalHabitRepository:
+          historicalHabitRepository ?? createUnavailableHistoricalHabitRepository(),
       },
     };
   }
@@ -518,6 +574,8 @@ function createMatchingRepositoryContext({
             return [];
           },
         },
+        historicalHabitRepository:
+          historicalHabitRepository ?? createUnavailableHistoricalHabitRepository(),
       },
     };
   }
@@ -536,7 +594,104 @@ function createMatchingRepositoryContext({
       repository: createDrizzleMatchingReadinessRepository(client.db),
       paperMaterialRepository:
         paperMaterialRepository ?? createDrizzleListRecommendablePaperMaterialsRepository(client.db),
+      historicalHabitRepository:
+        historicalHabitRepository ?? createDrizzleHistoricalHabitRecommendationRepository(client.db),
       close: client.close,
+    },
+  };
+}
+
+async function readHistoricalHabitContext(input: {
+  repository: HistoricalHabitRecommendationRepository;
+  boxSpec: NormalizedBoxSpec;
+  options: MatchingActionOptions;
+}): Promise<HistoricalHabitRecommendationContext> {
+  try {
+    return await (input.options.getHistoricalHabitContextFn ??
+      getHistoricalHabitRecommendationContext)({
+      repository: input.repository,
+      boxSpec: input.boxSpec,
+    });
+  } catch {
+    return createUnavailableHistoricalHabitContext(input.boxSpec);
+  }
+}
+
+function createHistoricalHabitSelectionContext(input: {
+  historicalHabitContext: HistoricalHabitRecommendationContext;
+  historicalCandidateGeneration: HistoricalHabitCandidateGenerationResult;
+  evaluation: EvaluateMatchingCandidatesResult;
+}): HistoricalHabitSelectionContext {
+  const historicalHabitByCandidateFingerprint: HistoricalHabitSelectionContext["historicalHabitByCandidateFingerprint"] =
+    {};
+  const globalMessages = new Set<string>([
+    ...input.historicalHabitContext.messages,
+    ...input.historicalCandidateGeneration.messages,
+    ...input.historicalCandidateGeneration.notices,
+    ...createHistoricalHabitConflictMessages({
+      unavailableRecords: input.historicalCandidateGeneration.unavailableRecords,
+    }),
+  ]);
+
+  for (const rejectedCandidate of input.evaluation.rejectedCandidates) {
+    const fingerprint = createMatchingCandidateFingerprint(rejectedCandidate.candidate);
+
+    if (input.historicalCandidateGeneration.evidenceByCandidateFingerprint[fingerprint]) {
+      for (const message of createHistoricalHabitConflictMessages({
+        rejectedReasons: rejectedCandidate.reasons,
+      })) {
+        globalMessages.add(message);
+      }
+    }
+  }
+
+  for (const eligibleCandidate of input.evaluation.eligibleCandidates) {
+    const fingerprint = createMatchingCandidateFingerprint(eligibleCandidate.candidate);
+    const evidences =
+      input.historicalCandidateGeneration.evidenceByCandidateFingerprint[fingerprint] ?? [];
+
+    if (input.historicalHabitContext.status !== "available" || evidences.length > 0) {
+      historicalHabitByCandidateFingerprint[fingerprint] =
+        createRecommendationHistoricalHabitInfo({
+          candidate: eligibleCandidate.candidate,
+          historicalHabitContext: input.historicalHabitContext,
+          evidences,
+        });
+    }
+  }
+
+  return {
+    status: input.historicalHabitContext.status,
+    historicalHabitByCandidateFingerprint,
+    globalMessages: Array.from(globalMessages),
+  };
+}
+
+function createUnavailableHistoricalHabitContext(
+  boxSpec: NormalizedBoxSpec,
+): HistoricalHabitRecommendationContext {
+  return {
+    status: "unavailable",
+    matchedDimensionKeys: {
+      productKey: boxSpec.productType,
+      weightBucketKey: getHistoricalOrderWeightBucket(boxSpec.productWeightKg),
+    },
+    similarOrderCount: 0,
+    summaries: [],
+    messages: ["暂无足够历史参考"],
+  };
+}
+
+function createUnavailableHistoricalHabitRepository(): HistoricalHabitRecommendationRepository {
+  return {
+    async findLatestConfirmedHabitBatch() {
+      return undefined;
+    },
+    async countSimilarStatisticalOrders() {
+      return 0;
+    },
+    async listHabitSummariesForRecommendation() {
+      return [];
     },
   };
 }

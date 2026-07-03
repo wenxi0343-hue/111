@@ -13,10 +13,12 @@ import type {
 import {
   calculateSafetySurplusRate,
   createCandidateFingerprint,
+  createMatchingCandidateFingerprint,
   scoreBalancedCandidates,
   sortCandidatesByEconomy,
   sortCandidatesBySafety,
 } from "@/modules/recommendation/scoring";
+import type { RecommendationHistoricalHabitInfo } from "@/modules/recommendation/types";
 
 function createLayer(overrides: Partial<CandidateLayer>): CandidateLayer {
   return {
@@ -141,6 +143,26 @@ describe("recommendation scoring", () => {
     ]);
   });
 
+  it("sorts economy candidates inside historical matches before lower cost defaults", () => {
+    const historical = createEligibleEvaluation({ id: "historical", costYuan: 2.3, bctN: 600 });
+    const lowerCostDefault = createEligibleEvaluation({
+      id: "lower-cost-default",
+      costYuan: 2.1,
+      bctN: 600,
+    });
+
+    const sorted = sortCandidatesByEconomy(
+      [lowerCostDefault, historical],
+      DEFAULT_CALCULATION_PARAMETERS,
+      createHistoricalSelectionContext([historical]),
+    );
+
+    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
+      "historical",
+      "lower-cost-default",
+    ]);
+  });
+
   it("uses lower safety surplus as the economy tie breaker when costs are equal", () => {
     const lowerSurplus = createEligibleEvaluation({ id: "lower-surplus", costYuan: 2.1, bctN: 440 });
     const higherSurplus = createEligibleEvaluation({
@@ -179,6 +201,27 @@ describe("recommendation scoring", () => {
     expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual(["high", "medium"]);
   });
 
+  it("sorts safety candidates inside historical matches before higher surplus defaults", () => {
+    const historical = createEligibleEvaluation({ id: "historical", costYuan: 2.3, bctN: 600 });
+    const higherSurplusDefault = createEligibleEvaluation({
+      id: "higher-surplus-default",
+      costYuan: 2.1,
+      bctN: 760,
+    });
+
+    const sorted = sortCandidatesBySafety(
+      [higherSurplusDefault, historical],
+      DEFAULT_CALCULATION_PARAMETERS,
+      {},
+      createHistoricalSelectionContext([historical]),
+    );
+
+    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
+      "historical",
+      "higher-surplus-default",
+    ]);
+  });
+
   it("uses default 50/50 weights for balanced scoring", () => {
     const lowCost = createEligibleEvaluation({ id: "low-cost", costYuan: 2, bctN: 400 });
     const highSafety = createEligibleEvaluation({ id: "high-safety", costYuan: 4, bctN: 800 });
@@ -189,6 +232,29 @@ describe("recommendation scoring", () => {
     );
 
     expect(scores.map((score) => score.balancedScore)).toEqual([0.5, 0.5]);
+  });
+
+  it("uses historical 40%, cost 30%, and safety 30% when historical context is provided", () => {
+    const highHistory = createEligibleEvaluation({ id: "high-history", costYuan: 3, bctN: 600 });
+    const lowHistoryLowCost = createEligibleEvaluation({
+      id: "low-history-low-cost",
+      costYuan: 2,
+      bctN: 600,
+    });
+
+    const scores = scoreBalancedCandidates(
+      [highHistory, lowHistoryLowCost],
+      DEFAULT_CALCULATION_PARAMETERS,
+      {},
+      createHistoricalSelectionContext([highHistory], { low: [lowHistoryLowCost] }),
+    );
+
+    expect(
+      scores.find((score) => score.evaluation.candidate.id === "high-history")?.balancedScore,
+    ).toBeGreaterThan(
+      scores.find((score) => score.evaluation.candidate.id === "low-history-low-cost")
+        ?.balancedScore ?? 0,
+    );
   });
 
   it("uses full cost score when all candidate costs are equal", () => {
@@ -226,3 +292,39 @@ describe("recommendation scoring", () => {
     );
   });
 });
+
+function createHistoricalSelectionContext(
+  highEvaluations: EligibleCandidateEvaluation[],
+  options: { low?: EligibleCandidateEvaluation[] } = {},
+) {
+  const historicalHabitByCandidateFingerprint: Record<string, RecommendationHistoricalHabitInfo> = {};
+
+  for (const evaluation of highEvaluations) {
+    historicalHabitByCandidateFingerprint[createMatchingCandidateFingerprint(evaluation.candidate)] =
+      createHistoricalInfo("high", "高匹配");
+  }
+
+  for (const evaluation of options.low ?? []) {
+    historicalHabitByCandidateFingerprint[createMatchingCandidateFingerprint(evaluation.candidate)] =
+      createHistoricalInfo("low", "低匹配");
+  }
+
+  return {
+    status: "available" as const,
+    historicalHabitByCandidateFingerprint,
+    globalMessages: [],
+  };
+}
+
+function createHistoricalInfo(
+  level: RecommendationHistoricalHabitInfo["level"],
+  label: RecommendationHistoricalHabitInfo["label"],
+): RecommendationHistoricalHabitInfo {
+  return {
+    level,
+    label,
+    reasons: [`${label}理由`],
+    evidences: [],
+    conflictMessages: [],
+  };
+}

@@ -76,6 +76,7 @@ function createSuccessResult(): { ok: true; data: GenerateMatchingSchemeResult }
       recommendationMessages: [],
       rejectedSummary: [],
       rejectedCandidates: [],
+      historicalHabitStatus: "unavailable",
     },
   };
 }
@@ -110,6 +111,7 @@ function createSuccessResultWithStacking(): { ok: true; data: GenerateMatchingSc
       rejectedSummary: [],
       rejectedCandidates: [],
       stackingDisplayText: "已纳入堆码承重校核",
+      historicalHabitStatus: "unavailable",
     },
   };
 }
@@ -302,6 +304,117 @@ function createRepeatedRecommendationResult(): { ok: true; data: GenerateMatchin
           unavailableReasons: [],
         },
         createUnavailableSlot("balanced", "均衡型", "没有更多不同的达标可生产候选组合"),
+      ],
+    },
+  };
+}
+
+function createHistoricalHabitRecommendationResult(): {
+  ok: true;
+  data: GenerateMatchingSchemeResult;
+} {
+  const result = createMatchingResultWithDetails();
+
+  return {
+    ok: true,
+    data: {
+      ...result.data,
+      historicalHabitStatus: "available",
+      recommendationMessages: ["历史常用组合当前不可用，已改为相近达标方案"],
+      recommendationSlots: [
+        {
+          ...result.data.recommendationSlots[0],
+          historicalHabit: {
+            level: "high",
+            label: "高匹配",
+            reasons: [
+              "相似产品中五层 BC 楞出现 18 次，占比 62%",
+              "纸厂和克重组合与历史常用组合一致",
+            ],
+            evidences: [
+              {
+                dimensionType: "product",
+                dimensionKey: "脱敏电子产品",
+                matchedFields: ["layer_count", "flute", "factory", "gram_weight"],
+                layerCount: 5,
+                flute: "BC",
+                orderCount: 18,
+                frequency: 0.62,
+              },
+            ],
+            conflictMessages: ["历史常用组合本次边压不足，已改为推荐达标的相近方案"],
+          },
+        },
+        {
+          ...result.data.recommendationSlots[1],
+          historicalHabit: {
+            level: "medium",
+            label: "中匹配",
+            reasons: ["相似尺寸区间中三层 B 楞仍有历史参考"],
+            evidences: [
+              {
+                dimensionType: "size_bucket",
+                dimensionKey: "小箱",
+                matchedFields: ["layer_count", "flute"],
+                layerCount: 3,
+                flute: "B",
+                orderCount: 8,
+                frequency: 0.4,
+              },
+            ],
+            conflictMessages: [],
+          },
+        },
+        {
+          ...result.data.recommendationSlots[2],
+          historicalHabit: {
+            level: "low",
+            label: "低匹配",
+            reasons: ["当前方案与历史常用组合只匹配部分弱特征"],
+            evidences: [
+              {
+                dimensionType: "weight_bucket",
+                dimensionKey: "≤20kg",
+                matchedFields: ["layer_count"],
+                layerCount: 3,
+                orderCount: 5,
+                frequency: 0.25,
+              },
+            ],
+            conflictMessages: [],
+          },
+        },
+      ],
+    },
+  };
+}
+
+function createInsufficientHistoricalHabitRecommendationResult(): {
+  ok: true;
+  data: GenerateMatchingSchemeResult;
+} {
+  const result = createMatchingResultWithDetails();
+  const createSlotWithInsufficientHistory = (slot: RecommendationSlot): RecommendationSlot => ({
+    ...slot,
+    historicalHabit: {
+      level: "insufficient",
+      label: "暂无足够历史参考",
+      reasons: ["相似历史订单少于 5 条，本次按现有推荐逻辑生成方案"],
+      evidences: [],
+      conflictMessages: [],
+    },
+  });
+
+  return {
+    ok: true,
+    data: {
+      ...result.data,
+      historicalHabitStatus: "insufficient",
+      recommendationMessages: ["暂无足够历史参考，本次按现有推荐逻辑生成方案"],
+      recommendationSlots: [
+        createSlotWithInsufficientHistory(result.data.recommendationSlots[0]),
+        createSlotWithInsufficientHistory(result.data.recommendationSlots[1]),
+        createSlotWithInsufficientHistory(result.data.recommendationSlots[2]),
       ],
     },
   };
@@ -739,6 +852,52 @@ describe("matching page", () => {
     expect(screen.getAllByText("边压 4.50 kN/m").length).toBeGreaterThan(0);
     expect(screen.getAllByText("耐破 3800").length).toBeGreaterThan(0);
     expect(screen.getAllByText("含税成本 2.13 元").length).toBeGreaterThan(0);
+  });
+
+  it("shows historical habit labels, reasons, and conflict messages on recommendation cards", async () => {
+    mockedGenerateMatchingScheme.mockResolvedValue(createHistoricalHabitRecommendationResult());
+    render(<MatchingPage />);
+
+    fillValidBoxSpecForm();
+    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
+
+    const economySlot = await screen.findByTestId("recommendation-slot-economy");
+
+    expect(economySlot.textContent ?? "").toContain("历史参考");
+    expect(economySlot.textContent ?? "").toContain("高匹配");
+    expect(economySlot.textContent ?? "").toContain("相似产品中五层 BC 楞出现 18 次，占比 62%");
+    expect(economySlot.textContent ?? "").toContain("纸厂和克重组合与历史常用组合一致");
+    expect(economySlot.textContent ?? "").toContain("历史常用组合本次边压不足，已改为推荐达标的相近方案");
+    expect(screen.getByText("中匹配")).toBeTruthy();
+    expect(screen.getByText("低匹配")).toBeTruthy();
+    expect(screen.getByText("历史常用组合当前不可用，已改为相近达标方案")).toBeTruthy();
+  });
+
+  it("shows insufficient history without exposing score, historical cost, or customer preference scope", async () => {
+    mockedGenerateMatchingScheme.mockResolvedValue(
+      createInsufficientHistoricalHabitRecommendationResult(),
+    );
+    render(<MatchingPage />);
+
+    fillValidBoxSpecForm();
+    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
+
+    const economySlot = await screen.findByTestId("recommendation-slot-economy");
+    const pageText = document.body.textContent ?? "";
+
+    expect(economySlot.textContent ?? "").toContain("暂无足够历史参考");
+    expect(economySlot.textContent ?? "").toContain("相似历史订单少于 5 条，本次按现有推荐逻辑生成方案");
+    expect(economySlot.textContent ?? "").not.toContain("高匹配");
+    expect(economySlot.textContent ?? "").not.toContain("中匹配");
+    expect(economySlot.textContent ?? "").not.toContain("低匹配");
+    expect(pageText).not.toContain("historicalHabitScore");
+    expect(pageText).not.toContain("rawScore");
+    expect(pageText).not.toContain("score");
+    expect(pageText).not.toContain("历史价格");
+    expect(pageText).not.toContain("历史成本");
+    expect(pageText).not.toContain("客户偏好");
+    expect(pageText).not.toContain("成本趋势");
+    expect(pageText).not.toContain("批量配纸");
   });
 
   it("marks a clicked recommendation as the current final scheme", async () => {

@@ -474,6 +474,9 @@ export function BoxSpecForm() {
                           <li key={metric}>{metric}</li>
                         ))}
                       </ul>
+                      {slot.historicalHabit ? (
+                        <HistoricalHabitPanel historicalHabit={slot.historicalHabit} />
+                      ) : null}
                     </>
                   ) : null}
                   {slot.messages.length > 0 ? (
@@ -623,6 +626,41 @@ export function BoxSpecForm() {
         </section>
       ) : null}
     </div>
+  );
+}
+
+function HistoricalHabitPanel({
+  historicalHabit,
+}: {
+  historicalHabit: NonNullable<RecommendationSlot["historicalHabit"]>;
+}) {
+  return (
+    <section className={styles.historicalHabitPanel} aria-label="历史参考">
+      <div className={styles.historicalHabitHeader}>
+        <span>历史参考</span>
+        <span
+          className={`${styles.historicalHabitBadge} ${
+            historicalHabit.level === "insufficient" ? styles.historicalHabitMutedBadge : ""
+          }`}
+        >
+          {historicalHabit.label}
+        </span>
+      </div>
+      {historicalHabit.reasons.length > 0 ? (
+        <ul className={styles.reasonList}>
+          {historicalHabit.reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      ) : null}
+      {historicalHabit.conflictMessages.length > 0 ? (
+        <ul className={styles.historicalConflictList}>
+          {historicalHabit.conflictMessages.map((message) => (
+            <li key={message}>{message}</li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }
 
