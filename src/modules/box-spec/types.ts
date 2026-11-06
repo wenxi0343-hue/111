@@ -2,6 +2,28 @@ export type BoxFormingMethod = "glue" | "staple";
 
 export type ProductArrangement = "single_row" | "double_row" | "staggered";
 
+export type ProductType =
+  | "食品"
+  | "日化"
+  | "电子"
+  | "五金"
+  | "服装"
+  | "普通产品"
+  | "贵重物品"
+  | "其他";
+
+export interface BoxSpecialRequirements {
+  dieCutting: boolean;
+  punctureStrengthRequired: boolean;
+  notes?: string | undefined;
+}
+
+export interface BoxSpecialRequirementsInput {
+  dieCutting?: boolean | undefined;
+  punctureStrengthRequired?: boolean | undefined;
+  notes?: string | undefined;
+}
+
 export interface BoxSpecInput {
   lengthMm: number | string | undefined;
   widthMm: number | string | undefined;
@@ -11,7 +33,7 @@ export interface BoxSpecInput {
   productType: string | undefined;
   productWeightKg: number | string | undefined;
   arrangement: ProductArrangement | string | undefined;
-  specialRequirements?: string | undefined;
+  specialRequirements?: BoxSpecialRequirementsInput | string | undefined;
   productionQuantity: number | string | undefined;
   stackingLayers?: number | string | undefined;
 }
@@ -35,10 +57,10 @@ export interface NormalizedBoxSpec {
   heightMm: number;
   structureType: string;
   formingMethod: BoxFormingMethod;
-  productType: string;
+  productType: ProductType;
   productWeightKg: number;
   arrangement: ProductArrangement;
-  specialRequirements?: string | undefined;
+  specialRequirements: BoxSpecialRequirements;
   productionQuantity: number;
   stackingRequirement: StackingRequirement;
 }

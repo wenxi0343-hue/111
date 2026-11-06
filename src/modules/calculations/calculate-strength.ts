@@ -1,5 +1,6 @@
 import type { NormalizedBoxSpec } from "@/modules/box-spec/types";
 
+import { resolveStrengthRequirement } from "./resolve-strength-requirement";
 import type {
   BoardAreaResult,
   CalculationParameters,
@@ -17,7 +18,7 @@ export function calculateStrength(input: {
   area: BoardAreaResult;
   parameters: CalculationParameters;
 }): StrengthResult {
-  const { candidate, area, parameters } = input;
+  const { boxSpec, candidate, area, parameters } = input;
   const burstStrength = calculateBurstStrength(candidate.layers);
   const edgeCrushNPerM = calculateEdgeCrush(candidate, parameters);
   const edgeCrushKnPerM = edgeCrushNPerM / 1000;
@@ -27,12 +28,16 @@ export function calculateStrength(input: {
     fluteType: candidate.fluteType,
     parameters,
   });
+  const requirement = resolveStrengthRequirement({
+    boxSpec,
+    layerCount: candidate.layerCount,
+    parameters,
+  });
   const reasons = buildStrengthReasons({
     burstStrength,
     edgeCrushKnPerM,
     bctN,
-    candidate,
-    parameters,
+    requirement,
   });
 
   return {
@@ -40,6 +45,7 @@ export function calculateStrength(input: {
     edgeCrushNPerM,
     edgeCrushKnPerM,
     bctN,
+    requirement,
     isQualified: reasons.length === 0,
     reasons,
   };
@@ -51,7 +57,9 @@ function calculateBurstStrength(layers: CandidateLayer[]): number {
       return sum;
     }
 
-    return sum + Math.round(readNumber(layer.paper.burstIndex) * readNumber(layer.paper.gramWeightGsm));
+    return (
+      sum + Math.round(readNumber(layer.paper.burstIndex) * readNumber(layer.paper.gramWeightGsm))
+    );
   }, 0);
 
   return Math.round(total * 0.95);
@@ -98,29 +106,35 @@ function buildStrengthReasons({
   burstStrength,
   edgeCrushKnPerM,
   bctN,
-  candidate,
-  parameters,
+  requirement,
 }: {
   burstStrength: number;
   edgeCrushKnPerM: number;
   bctN: number;
-  candidate: MatchingCandidate;
-  parameters: CalculationParameters;
+  requirement: {
+    minBctN: number;
+    minEdgeCrushKnPerM: number;
+    minBurstStrength: number;
+  };
 }): RejectionReason[] {
-  const threshold = parameters.strengthThresholds[candidate.layerCount];
   const reasons: RejectionReason[] = [];
 
-  if (bctN < threshold.minBctN) {
-    reasons.push(createStrengthReason("BCT_TOO_LOW", `空箱抗压不足，低于 ${threshold.minBctN}N`));
-  }
-
-  if (edgeCrushKnPerM < threshold.minEdgeCrushKnPerM) {
+  if (bctN < requirement.minBctN) {
     reasons.push(
-      createStrengthReason("ECT_TOO_LOW", `边压不足，低于 ${threshold.minEdgeCrushKnPerM}kN/m`),
+      createStrengthReason("BCT_TOO_LOW", `空箱抗压不足，低于 ${requirement.minBctN}N`),
     );
   }
 
-  if (burstStrength < parameters.burstStrengthThresholdsByLayerCount[candidate.layerCount]) {
+  if (edgeCrushKnPerM < requirement.minEdgeCrushKnPerM) {
+    reasons.push(
+      createStrengthReason(
+        "ECT_TOO_LOW",
+        `边压不足，低于 ${requirement.minEdgeCrushKnPerM}kN/m`,
+      ),
+    );
+  }
+
+  if (burstStrength < requirement.minBurstStrength) {
     reasons.push(createStrengthReason("BURST_TOO_LOW", "耐破不足"));
   }
 
@@ -143,7 +157,12 @@ function resolveCorrugatingFlute(
     return layer.flute;
   }
 
-  if (candidate.fluteType === "A" || candidate.fluteType === "B" || candidate.fluteType === "C" || candidate.fluteType === "E") {
+  if (
+    candidate.fluteType === "A" ||
+    candidate.fluteType === "B" ||
+    candidate.fluteType === "C" ||
+    candidate.fluteType === "E"
+  ) {
     return candidate.fluteType;
   }
 

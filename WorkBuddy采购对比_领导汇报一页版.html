@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkBuddy 采购方案对比（领导汇报一页版）</title>
+<style>
+  *{box-sizing:border-box;}
+  body{font-family:-apple-system,"Microsoft YaHei","PingFang SC",sans-serif;margin:0;background:#f0f2f5;color:#1f2329;line-height:1.55;}
+  .page{max-width:1000px;margin:24px auto;background:#fff;border-radius:12px;padding:34px 38px 28px;box-shadow:0 2px 12px rgba(0,0,0,.07);}
+  h1{font-size:26px;margin:0 0 4px;color:#0b57d0;}
+  .sub{font-size:13px;color:#6b7684;margin-bottom:20px;}
+  .verdict{background:#e8f0fe;border-left:5px solid #0b57d0;border-radius:8px;padding:16px 18px;font-size:17px;color:#12305e;margin-bottom:22px;}
+  .verdict b{font-size:19px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .plan{border:1px solid #e3e7ec;border-radius:10px;overflow:hidden;background:#fff;}
+  .plan .top{padding:10px 18px;color:#fff;font-size:16px;font-weight:600;}
+  .plan.p .top{background:#1a7f37;}
+  .plan.e .top{background:#0b57d0;}
+  .plan .body{padding:18px 20px 20px;}
+  .big{font-size:40px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;}
+  .plan.p .big{color:#1a7f37;}
+  .plan.e .big{color:#0b57d0;}
+  .unit{font-size:14px;color:#6b7684;margin-top:2px;}
+  .annual{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-top:12px;padding:9px 11px;background:#f7f8fa;border-radius:7px;font-size:12.5px;color:#6b7684;}
+  .annual b{font-size:18px;font-variant-numeric:tabular-nums;}
+  .plan.p .annual b{color:#1a7f37;}
+  .plan.e .annual b{color:#0b57d0;}
+  .annual .alt{font-size:12px;}
+  .split{border-top:1px dashed #dfe3e8;margin:14px 0 12px;}
+  .line{display:flex;justify-content:space-between;font-size:14px;margin:5px 0;}
+  .line .v{font-weight:600;font-variant-numeric:tabular-nums;}
+  .tip{font-size:12px;color:#6b7684;background:#f7f8fa;border-radius:6px;padding:7px 10px;margin-top:12px;}
+  h2{font-size:16px;margin:26px 0 10px;color:#243;}
+  .bar-row{display:flex;align-items:center;gap:12px;margin:9px 0;}
+  .bar-name{width:70px;font-size:14px;font-weight:600;flex:none;}
+  .bar-track{flex:1;background:#eef1f5;border-radius:7px;height:34px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:7px;color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;padding-left:14px;white-space:nowrap;}
+  .bar-fill.g{background:#1a7f37;}
+  .bar-fill.b{background:#0b57d0;}
+  .rng{font-size:12.5px;color:#6b7684;margin-top:10px;}
+  ul.pl{list-style:none;padding:0;margin:0;}
+  ul.pl li{font-size:14px;padding:8px 0 8px 30px;position:relative;border-bottom:1px solid #f0f2f5;}
+  ul.pl li:last-child{border-bottom:none;}
+  ul.pl li.ok:before,ul.pl li.no:before{position:absolute;left:0;top:7px;width:20px;height:20px;border-radius:5px;text-align:center;line-height:20px;font-size:13px;font-weight:700;color:#fff;}
+  ul.pl li.ok:before{content:"✓";background:#1a7f37;}
+  ul.pl li.no:before{content:"✕";background:#d93025;}
+  .advice{background:#fff8e1;border-left:5px solid #f9ab00;border-radius:8px;padding:14px 18px;font-size:15px;color:#5a4a00;margin-top:24px;}
+  .foot{margin-top:22px;padding-top:12px;border-top:1px solid #e3e7ec;font-size:11.5px;color:#8a939e;}
+  @media (max-width:720px){.grid2{grid-template-columns:1fr;}.page{padding:22px;}}
+  @media print{body{background:#fff}.page{box-shadow:none;margin:0;max-width:none;padding:18px 22px}.verdict,.plan,.advice{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>WorkBuddy 采购方案对比</h1>
+<div class="sub">4 个部门 · 每部门 2–3 人（合计 8–12 人）　｜　腾讯云官方公示价 · 2026-11-05 核验</div>
+
+<div class="verdict">
+一句话结论：<b>个人版便宜一半</b>——10 人每月 990 元，企业版 1,980 元。企业版多出的 <b>990 元/月</b>，买的是「账号由公司管得住」。
+</div>
+
+<div class="grid2">
+  <div class="plan p">
+    <div class="top">个人版（标准版）</div>
+    <div class="body">
+      <div class="big">99 元</div>
+      <div class="unit">/ 人 / 月　·　按人订阅，1 人起</div>
+      <div class="annual"><span>每人每年</span><b>1,188 元</b><span class="alt">· 连续包年仅 672 元</span></div>
+      <div class="split"></div>
+      <div class="line"><span>10 人 · 每月</span><span class="v">990 元</span></div>
+      <div class="line"><span>10 人 · 全年</span><span class="v">11,880 元</span></div>
+      <div class="tip">长期用改「连续包年」5.6 折：10 人全年仅 <b>6,720 元</b>（省 5,160 元）</div>
+    </div>
+  </div>
+  <div class="plan e">
+    <div class="top">企业版（旗舰版）</div>
+    <div class="body">
+      <div class="big">198 元</div>
+      <div class="unit">/ 人 / 月　·　按席位订阅，1 席起</div>
+      <div class="annual"><span>每人每年</span><b>2,376 元</b><span class="alt">· 年付同价，无折扣</span></div>
+      <div class="split"></div>
+      <div class="line"><span>10 人 · 每月</span><span class="v">1,980 元</span></div>
+      <div class="line"><span>10 人 · 全年</span><span class="v">23,760 元</span></div>
+      <div class="tip">年付 = 月付 × 12，<b>年付没有折扣</b>，先按月付试点不吃亏</div>
+    </div>
+  </div>
+</div>
+
+<h2>10 人每月成本对比</h2>
+<div class="bar-row"><span class="bar-name">个人版</span><div class="bar-track"><div class="bar-fill g" style="width:50%">990 元 / 月</div></div></div>
+<div class="bar-row"><span class="bar-name">企业版</span><div class="bar-track"><div class="bar-fill b" style="width:100%">1,980 元 / 月</div></div></div>
+<div class="rng">人数区间：8 人 → 792 / 1,584 元/月　｜　12 人 → 1,188 / 2,376 元/月（个人版 / 企业版）</div>
+
+<h2>优势与劣势</h2>
+<div class="grid2">
+  <div class="plan p">
+    <div class="top">个人版</div>
+    <div class="body" style="padding-top:8px;padding-bottom:10px;">
+      <ul class="pl">
+        <li class="ok">便宜一半，长期用还能打 5.6 折</li>
+        <li class="ok">随时增减人数、随时取消，不用签合同</li>
+        <li class="no">账号属员工个人，离职时收不回、资料难交接</li>
+        <li class="no">无统一管控、审计和集中开票，积分各用各的</li>
+      </ul>
+    </div>
+  </div>
+  <div class="plan e">
+    <div class="top">企业版</div>
+    <div class="body" style="padding-top:8px;padding-bottom:10px;">
+      <ul class="pl">
+        <li class="ok">账号统一分配回收、SSO、审计，一张合同统一开票</li>
+        <li class="ok">积分团队共享，含腾讯文档等办公套件</li>
+        <li class="no">贵一倍，且年付没有任何折扣</li>
+        <li class="no">下单时套件二选一，选定后不可更改</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="advice">
+<b>建议</b>：先按月付试点 1 个部门（3 人约 <b>594 元/月</b>）2–4 周，看实际用量和是否真需要统一管控，再决定全量采购。企业版年付不省钱，不必急着签年单。
+</div>
+
+<div class="foot">
+价格来源：腾讯云官方公示价（个人版定价页、WorkBuddy Enterprise 版本说明与计费概述，2026-11-05 核验）。未含实施培训费、渠道折扣与税费差异，最终以正式报价为准。<br>
+详细测算与风险清单见同目录《WorkBuddy企业版与个人版采购成本分析报告.html》。
+</div>
+
+</div>
+</body>
+</html>

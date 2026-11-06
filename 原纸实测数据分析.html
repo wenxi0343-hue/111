@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>钉钉原纸实测数据分析</title><style>
+:root{--bg:#0f1419;--p:#1a2027;--p2:#222b35;--ln:#2e3a47;--t:#e6edf3;--m:#9aa7b4;--a:#4cc9f0;--r:#ff6b6b;--g:#5dd39e;--w:#ffb454}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--t);line-height:1.7;padding:32px 20px}
+.wrap{max-width:1080px;margin:0 auto}
+h1{font-size:25px;margin-bottom:6px;color:#fff}
+h2{font-size:19px;margin:30px 0 12px;color:var(--a);border-left:4px solid var(--a);padding-left:10px}
+h3{font-size:15px;margin:16px 0 8px;color:#cfe8f5}
+p,li{font-size:14.5px;color:var(--t)}
+.sub{color:var(--m);font-size:14px;margin-bottom:18px}
+.card{background:var(--p);border:1px solid var(--ln);border-radius:12px;padding:16px 20px;margin:12px 0}
+.kpi{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+.kpi .b{flex:1;min-width:140px;background:var(--p2);border:1px solid var(--ln);border-radius:10px;padding:14px}
+.kpi .n{font-size:21px;color:var(--a);font-weight:700}.kpi .l{font-size:12.5px;color:var(--m)}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+th,td{border:1px solid var(--ln);padding:7px 9px;text-align:left}
+th{background:var(--p2);color:#cfe8f5}
+.warn{background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.4);border-radius:10px;padding:12px 16px;margin:12px 0}
+.good{background:rgba(93,211,158,.1);border:1px solid rgba(93,211,158,.4);border-radius:10px;padding:12px 16px;margin:12px 0}
+.note{background:rgba(76,201,240,.08);border-left:3px solid var(--a);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px;color:#cfe8f5}
+.tag{display:inline-block;font-size:12px;padding:2px 9px;border-radius:20px;margin-right:6px}
+.tag.r{background:rgba(255,107,107,.15);color:var(--r);border:1px solid rgba(255,107,107,.4)}
+.tag.g{background:rgba(93,211,158,.15);color:var(--g);border:1px solid rgba(93,211,158,.4)}
+code{background:#0c1116;border:1px solid var(--ln);border-radius:5px;padding:1px 6px;font-size:12.5px;color:#ffd479}
+</style></head><body><div class="wrap">
+<h1>钉钉「2026年原纸检测结果」实测数据分析</h1>
+<p class="sub">数据源：钉钉共享文档《纸箱-2026年原纸检测结果》· 云南岭东印刷包装有限公司 / 工艺质量部 · nodeId XPwkYGxZV3M2vEoLsgYa57j98AgozOKL</p>
+
+<div class="card">
+<h3>一、数据概览</h3>
+<div class="kpi">
+<div class="b"><div class="n">993</div><div class="l">有效检测记录</div></div>
+<div class="b"><div class="n">11</div><div class="l">供货单位</div></div>
+<div class="b"><div class="n">22</div><div class="l">原纸品名</div></div>
+<div class="b"><div class="n">2026.1–9</div><div class="l">检验日期跨度</div></div>
+</div>
+<p>每条记录含<b>实测</b>字段：水份、克重、紧度、横幅定量差、<b>耐破指数</b>、耐折程度、纵向裂断长、两端重之差、吸水性、<b>环压指数</b>、光泽度、色泽、综合判定，以及供货单位 / 检验日期 / 品名 / 规格（克重×门幅）。<b>这正是"供应商实测物理指标主表"的现成数据</b>，可直接替代原"等级固定值"模型。</p>
+<p class="note">说明：该检测表<b>不含单价（元/吨）</b>。要做"单位有效强度成本"性价比排序，还需把价格补进来（见第四节）。</p>
+</div>
+
+<h2>二、直接证实：同等级 ≠ 同质量（真实数据）</h2>
+
+<div class="card">
+<h3>2.1 同厂同品名「A级高瓦纸 120g」（云南东晟，13 个批次）</h3>
+<p>同一纸厂、同一品名、同一等级，实测环压在 <b>6.87–9.43</b>（极差 37%），耐破在 <b>0.26–1.12</b>（极差 4 倍）。等级标签完全掩盖了这种波动。</p>
+<table><tr><th>指标</th><th>均值</th><th>最小</th><th>最大</th><th>变异系数CV</th></tr>
+<tr><td>环压指数</td><td>8.72</td><td>6.87</td><td>9.43</td><td>7.9%</td></tr>
+<tr><td>耐破指数</td><td>0.83</td><td>0.26</td><td>1.12</td><td>24.2%</td></tr>
+</table>
+<div class="warn"><b>异常批次预警：</b>2026.9.1 的 A级高瓦 120g 实测 <b>耐破 0.26、环压 6.87</b>，远低于项目「合格品」阈值（耐破≥0.4 / 环压≥7.7），却仍被判定"合格"。若按"等级=A级即达标"直接选用，这一批会让纸箱边压/平压不足、成型扁楞——这正是等级口径的盲区。</div>
+</div>
+
+<div class="card">
+<h3>2.2 同厂同品名「N级箱板纸 200g」（重庆理文，30 个批次）</h3>
+<p>耐破 <b>2.22–2.66</b>、环压 <b>9.61–12.87</b>、紧度 <b>0.63–0.75</b>。注意：项目标准里 200g 合格品=耐破2.25/环压10.5、一等品=3.35/12.5。N级实测多落在<b>合格~一等之间</b>，而内部默认（优等牛卡 4660 元/吨）是按"优等"定价，实测根本达不到优等——等级与实测严重错位。</p>
+<table><tr><th>指标</th><th>均值</th><th>最小</th><th>最大</th><th>CV</th></tr>
+<tr><td>环压指数</td><td>11.20</td><td>9.61</td><td>12.87</td><td>8.8%</td></tr>
+<tr><td>耐破指数</td><td>2.38</td><td>2.22</td><td>2.66</td><td>6.6%</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>2.3 同克重不同纸种的质量倒挂（云南东晟 120g）</h3>
+<p>同厂 120g：<b>T类箱板纸</b>实测环压 7.22–11.63、耐破 1.14–1.88；<b>A级高瓦纸</b>实测环压 6.87–9.43、耐破 0.26–1.12。即"T类箱板"的实测强度<b>反而高于</b>"A级高瓦"——品名/等级标签会误导选型，只有实测值可靠。</p>
+</div>
+
+<h2>三、对你箱子（面纸200g + B瓦120g）的实测候选</h2>
+<div class="card">
+<h3>3.1 200g 面里纸候选（项目阈值：合格 耐破2.25/环压10.5，一等 3.35/12.5）</h3>
+<p>全部为理文 N级箱板纸。下表按实测值排序，<span class="tag g">绿=超一等阈值</span><span class="tag r">红=低于合格阈值</span>：</p>
+<table><tr><th>供货单位</th><th>品名</th><th>规格</th><th>日期</th><th>水份</th><th>耐破</th><th>环压</th><th>紧度</th><th>判定</th></tr>
+<tr><td>东莞理文</td><td>N级箱板纸</td><td>200g*1170</td><td>2026.4.7</td><td>8.20</td><td style='color:#ff6b6b'>2.24</td><td style='color:#ff6b6b'>10.24</td><td>0.63</td><td>合格</td></tr><tr><td>东莞理文</td><td>N级箱板纸</td><td>200g*1550</td><td>2026.4.7</td><td>8.16</td><td style='color:#ffb454'>2.25</td><td style='color:#ff6b6b'>10.33</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1300</td><td>2026.1.10</td><td>8.34</td><td style='color:#ffb454'>2.33</td><td style='color:#ffb454'>10.80</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1530</td><td>2026.1.10</td><td>8.50</td><td style='color:#ffb454'>2.34</td><td style='color:#ffb454'>10.74</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1170</td><td>2026.2.6</td><td>7.65</td><td style='color:#ffb454'>2.28</td><td style='color:#ffb454'>10.56</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1200</td><td>2026.2.6</td><td>7.66</td><td style='color:#ffb454'>2.29</td><td style='color:#ffb454'>10.55</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1350</td><td>2026.2.6</td><td>7.71</td><td style='color:#ffb454'>2.26</td><td style='color:#ffb454'>10.70</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1350</td><td>2026.2.7</td><td>7.76</td><td style='color:#ffb454'>2.31</td><td style='color:#ffb454'>10.81</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1530</td><td>2026.2.7</td><td>7.80</td><td style='color:#ffb454'>2.30</td><td style='color:#ffb454'>10.73</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1170</td><td>2026.4.7</td><td>8.32</td><td style='color:#ff6b6b'>2.22</td><td style='color:#ff6b6b'>10.30</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1350</td><td>2026.4.7</td><td>8.40</td><td style='color:#ffb454'>2.25</td><td style='color:#ff6b6b'>10.24</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1550</td><td>2026.4.7</td><td>8.22</td><td style='color:#ff6b6b'>2.22</td><td style='color:#ff6b6b'>10.25</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1650</td><td>2026.4.7</td><td>8.18</td><td style='color:#ff6b6b'>2.22</td><td style='color:#ff6b6b'>10.27</td><td>0.63</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1350</td><td>2026.4.9</td><td>8.45</td><td style='color:#ffb454'>2.27</td><td style='color:#ffb454'>11.20</td><td>0.66</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1300</td><td>2026.5.11</td><td>8.33</td><td style='color:#ffb454'>2.25</td><td style='color:#ffb454'>11.45</td><td>0.66</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1400</td><td>2026.5.11</td><td>8.40</td><td style='color:#ff6b6b'>2.24</td><td style='color:#ffb454'>11.52</td><td>0.66</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1450</td><td>2026.5.11</td><td>8.26</td><td style='color:#ffb454'>2.25</td><td style='color:#ffb454'>11.32</td><td>0.66</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1170</td><td>2026.5.12</td><td>7.67</td><td style='color:#ffb454'>2.65</td><td style='color:#5dd39e'>12.87</td><td>0.75</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1400</td><td>2026.5.12</td><td>7.57</td><td style='color:#ffb454'>2.64</td><td style='color:#5dd39e'>12.67</td><td>0.75</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1450</td><td>2026.5.12</td><td>7.33</td><td style='color:#ffb454'>2.66</td><td style='color:#5dd39e'>12.77</td><td>0.75</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1500</td><td>2026.5.12</td><td>7.44</td><td style='color:#ffb454'>2.65</td><td style='color:#5dd39e'>12.80</td><td>0.75</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1220</td><td>2026.6.11</td><td>7.20</td><td style='color:#ffb454'>2.55</td><td style='color:#ffb454'>12.13</td><td>0.75</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1500</td><td>2026.6.11</td><td>7.14</td><td style='color:#ffb454'>2.54</td><td style='color:#ffb454'>12.40</td><td>0.75</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1300</td><td>2026.6.11</td><td>7.30</td><td style='color:#ffb454'>2.56</td><td style='color:#5dd39e'>12.54</td><td>0.75</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1530</td><td>2026.6.11</td><td>7.35</td><td style='color:#ffb454'>2.57</td><td style='color:#ffb454'>12.35</td><td>0.75</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1300</td><td>2026.7.27</td><td>7.20</td><td style='color:#ffb454'>2.26</td><td style='color:#ffb454'>11.24</td><td>0.65</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1450</td><td>2026.7.27</td><td>7.26</td><td style='color:#ffb454'>2.26</td><td style='color:#ffb454'>11.32</td><td>0.65</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1600</td><td>2026.7.27</td><td>7.31</td><td style='color:#ffb454'>2.25</td><td style='color:#ffb454'>11.31</td><td>0.65</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1200</td><td>2026.9.14</td><td>8.82</td><td style='color:#ffb454'>2.50</td><td style='color:#ff6b6b'>9.61</td><td>0.70</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1530</td><td>2026.9.14</td><td>8.89</td><td style='color:#ffb454'>2.49</td><td style='color:#ff6b6b'>9.70</td><td>0.70</td><td>合格</td></tr><tr><td>重庆理文</td><td>N级箱板纸</td><td>200g*1550</td><td>2026.9.14</td><td>8.71</td><td style='color:#ffb454'>2.51</td><td style='color:#ff6b6b'>9.64</td><td>0.70</td><td>合格</td></tr>
+</table>
+<p class="note">观察：重庆理文 2026.5.12 批次（紧度0.75、环压12.8）明显优于 2026.9.14 批次（水份8.8、环压9.6）。<b>同厂同品也有批次差</b>，选型应取近期实测较好批次，而非笼统"N级"。</p>
+</div>
+
+<div class="card">
+<h3>3.2 120g B瓦候选（项目阈值：合格 耐破0.4/环压7.7，一等 0.65/8.4）</h3>
+<table><tr><th>供货单位</th><th>品名</th><th>规格</th><th>日期</th><th>水份</th><th>耐破</th><th>环压</th><th>紧度</th><th>判定</th></tr>
+<tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1350</td><td>2026.1.1</td><td>7.34</td><td style='color:#5dd39e'>1.08</td><td style='color:#5dd39e'>8.45</td><td>0.53</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1350</td><td>2026.1.12</td><td>6.67</td><td style='color:#5dd39e'>1.00</td><td style='color:#5dd39e'>9.43</td><td>0.53</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1350</td><td>2026.1.24</td><td>6.57</td><td style='color:#5dd39e'>0.83</td><td style='color:#5dd39e'>8.77</td><td>0.53</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1170</td><td>2026.2.9</td><td>7.55</td><td style='color:#5dd39e'>0.82</td><td style='color:#5dd39e'>8.78</td><td>0.53</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1350</td><td>2026.2.9</td><td>7.47</td><td style='color:#5dd39e'>0.81</td><td style='color:#5dd39e'>8.89</td><td>0.53</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1350</td><td>2026.3.11</td><td>6.27</td><td style='color:#5dd39e'>0.88</td><td style='color:#ffb454'>8.00</td><td>0.52</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1350</td><td>2026.3.28</td><td>7.33</td><td style='color:#5dd39e'>0.80</td><td style='color:#5dd39e'>8.57</td><td>0.52</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1350</td><td>2026.4.8</td><td>6.55</td><td style='color:#5dd39e'>0.94</td><td style='color:#ffb454'>8.30</td><td>0.52</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1170</td><td>2026.5.22</td><td>6.37</td><td style='color:#5dd39e'>0.80</td><td style='color:#5dd39e'>9.43</td><td>0.52</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1170</td><td>2026.8.19</td><td>6.63</td><td style='color:#5dd39e'>1.12</td><td style='color:#5dd39e'>9.33</td><td>0.53</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1170</td><td>2026.8.26</td><td>6.36</td><td style='color:#5dd39e'>0.77</td><td style='color:#5dd39e'>9.22</td><td>0.77</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1350</td><td>2026.8.26</td><td>6.44</td><td style='color:#5dd39e'>0.73</td><td style='color:#5dd39e'>9.31</td><td>0.73</td><td>合格</td></tr><tr><td>云南东晟</td><td>A级高瓦纸</td><td>120g*1350</td><td>2026.9.1</td><td>7.36</td><td style='color:#ff6b6b'>0.26</td><td style='color:#ff6b6b'>6.87</td><td>0.52</td><td>合格</td></tr><tr><td>云南东晟</td><td>T类箱板纸</td><td>120g*1300</td><td>2026.1.6</td><td>7.52</td><td style='color:#5dd39e'>1.25</td><td style='color:#5dd39e'>8.50</td><td>0.62</td><td>合格</td></tr><tr><td>云南东晟</td><td>T类箱板纸</td><td>120g*1400</td><td>2026.1.6</td><td>7.43</td><td style='color:#5dd39e'>1.26</td><td style='color:#ffb454'>8.37</td><td>0.62</td><td>合格</td></tr><tr><td>云南东晟</td><td>T类箱板纸</td><td>120g*1200</td><td>2026.7.18</td><td>7.22</td><td style='color:#5dd39e'>1.87</td><td style='color:#5dd39e'>11.55</td><td>0.61</td><td>合格</td></tr><tr><td>云南东晟</td><td>T类箱板纸</td><td>120g*1250</td><td>2026.7.18</td><td>7.16</td><td style='color:#5dd39e'>1.88</td><td style='color:#5dd39e'>11.63</td><td>0.61</td><td>合格</td></tr><tr><td>云南东晟</td><td>T类箱板纸</td><td>120g*1200</td><td>2026.8.26</td><td>6.56</td><td style='color:#5dd39e'>1.16</td><td style='color:#5dd39e'>10.33</td><td>0.62</td><td>合格</td></tr><tr><td>云南东晟</td><td>T类箱板纸</td><td>120g*1200</td><td>2026.9.1</td><td>7.21</td><td style='color:#5dd39e'>1.15</td><td style='color:#5dd39e'>10.21</td><td>0.57</td><td>合格</td></tr><tr><td>云南东晟</td><td>T类箱板纸</td><td>120g*1250</td><td>2026.9.1</td><td>7.15</td><td style='color:#5dd39e'>1.14</td><td style='color:#5dd39e'>10.30</td><td>0.57</td><td>合格</td></tr><tr><td>云南东晟</td><td>T类箱板纸</td><td>120g*1000</td><td>2026.9.20</td><td>6.21</td><td style='color:#5dd39e'>1.88</td><td style='color:#ff6b6b'>7.22</td><td>0.60</td><td>合格</td></tr>
+</table>
+<p class="note">云南东晟是 120g 唯一来源。其中 T类箱板纸 120g 实测（环压10+）整体优于 A级高瓦 120g；A级高瓦中 2026.9.1 批次（耐破0.26/环压6.87）低于合格线，应排除。B楞120g建议优先选 T类箱板 或 A级高瓦中环压≥8.4 的批次。</p>
+</div>
+
+<h2>四、如何接入配纸工具（落实上一轮优化方案）</h2>
+<div class="card">
+<ol>
+<li><b>实测优先</b>：把本表「供货单位+品名+规格+克重」的实测 耐破/环压 作为 <code>matching-source.ts</code> 的 <code>burstIndex</code>/<code>ringCrushIndex</code> 真值，等级标准仅作校验底线。</li>
+<li><b>可靠系数 / 批次CV</b>：用本表同组（供货单位+品名+克重）的 CV 折算 <code>reliability</code>（如 CV≤8%→0.97，8–15%→0.93，&gt;15%→0.88），再算有效强度。</li>
+<li><b>安全余量</b>：达标判定 = 有效强度 ≥ 需求 ×(1+10%)，吸收批次波动。</li>
+<li><b>性价比排序（待补价）</b>：本表无单价。需把价格并入（内部 纸价(1).xlsx 最新仅到2026-05，或市场询价），再算 单位有效强度成本 = 有效环压贡献 / 吨价，经济型据此排序。</li>
+<li><b>异常拦截</b>：对类似 2026.9.1 这种低于合格阈值的批次，工具应标红并强制不可选，避免"合格判定"误导。</li>
+</ol>
+</div>
+
+<h2>五、下一步建议</h2>
+<div class="card">
+<ul>
+<li><b>入库</b>：已将结构化主表写入 <code>数据/原纸实测物理指标主表.csv</code>（993 行，含全部实测字段）。</li>
+<li><b>映射代码表</b>：将本表「供货单位+品名+规格」与项目 <code>原纸代码表</code> 的编码体系对齐，才能被配纸工具直接调用——这是接线的下一步。</li>
+<li><b>补价算性价比</b>：提供各供应商 120g/200g 当前单价（或授权我读内部纸价表/市场价），即可算出真正的"单位有效强度成本"最优解。</li>
+<li><b>刷新内部纸价</b>：内部 纸价(1).xlsx 已滞后至 2026-05，建议新增 26-10 工作表。</li>
+</ul>
+</div>
+</div></body></html>

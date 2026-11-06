@@ -54,8 +54,8 @@ function createTestHash(password: string, salt: string): string {
   ].join("$");
 }
 
-function renderLoginForm() {
-  return render(<LoginForm />);
+function renderLoginForm(nextPath?: string) {
+  return render(<LoginForm {...(nextPath ? { nextPath } : {})} />);
 }
 
 function queryForbiddenEntries() {
@@ -161,7 +161,7 @@ describe("login page", () => {
     expect(pageText).not.toContain("公式参数");
   });
 
-  it("moves to the dashboard after successful login", async () => {
+  it("moves to history after successful login", async () => {
     mockedLoginWithPassword.mockResolvedValue({
       ok: true,
       data: {
@@ -176,25 +176,49 @@ describe("login page", () => {
     fireEvent.submit(screen.getByRole("form", { name: "登录表单" }));
 
     await waitFor(() => {
-      expect(mocks.replace).toHaveBeenCalledWith("/dashboard");
+      expect(mocks.replace).toHaveBeenCalledWith("/history");
       expect(mocks.refresh).toHaveBeenCalled();
     });
   });
 
-  it("redirects an already logged-in user from login page to dashboard", async () => {
+  it("returns to the requested internal page after successful login", async () => {
+    mockedLoginWithPassword.mockResolvedValue({
+      ok: true,
+      data: {
+        username: "operator",
+        displayName: "操作员",
+      },
+    });
+    renderLoginForm("/history");
+
+    fireEvent.change(screen.getByLabelText("账号"), { target: { value: "operator" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "correct-password" } });
+    fireEvent.submit(screen.getByRole("form", { name: "登录表单" }));
+
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith("/history");
+      expect(mocks.refresh).toHaveBeenCalled();
+    });
+  });
+
+  it("redirects an already logged-in user to the requested protected page", async () => {
     const session = createSessionValue({
       user: {
         username: "operator",
         displayName: "操作员",
       },
       sessionSecret,
-      now: new Date("2026-06-29T00:00:00.000Z"),
+      now: new Date(),
     });
     mocks.cookies.mockResolvedValue({
       get: vi.fn(() => ({ value: session.value })),
     });
 
-    await expect(LoginPage()).rejects.toThrow("NEXT_REDIRECT:/dashboard");
-    expect(mocks.redirect).toHaveBeenCalledWith("/dashboard");
+    await expect(
+      LoginPage({
+        searchParams: Promise.resolve({ next: "/history" }),
+      }),
+    ).rejects.toThrow("NEXT_REDIRECT:/history");
+    expect(mocks.redirect).toHaveBeenCalledWith("/history");
   });
 });

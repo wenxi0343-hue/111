@@ -3,7 +3,8 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import { matchingSchemes } from "@/db/schema";
 import type * as schema from "@/db/schema";
-import type { MatchingSchemeExportRecord } from "@/modules/import-export/matching-scheme-pdf-types";
+import type { MatchingSchemeExportRecord } from "@/modules/import-export/matching-scheme-export-types";
+import type { SelectionReason } from "@/modules/ai-reasoning/types";
 import type { ActionResult } from "@/shared/types/action-result";
 
 type AppDatabase = NodePgDatabase<typeof schema>;
@@ -40,6 +41,7 @@ export interface MatchingSchemeHistorySummary {
   finalStatus: string;
   isManuallyAdjusted: boolean;
   warningMessages: string[];
+  selectionReason?: SelectionReason | undefined;
   exportRecords: MatchingSchemeExportRecord[];
 }
 
@@ -294,6 +296,8 @@ class DrizzleMatchingSchemeHistoryRepository implements MatchingSchemeHistoryRep
       return toHistoryRecord(updatedRow);
     });
   }
+
+
 }
 
 function toInsertValues(input: MatchingSchemeHistoryRecordInput) {
@@ -336,7 +340,47 @@ function toHistorySummary(record: MatchingSchemeHistoryRecord): MatchingSchemeHi
     finalStatus: getStringSnapshotValue(record.finalSchemeSnapshot, "finalStatus", "unknown"),
     isManuallyAdjusted: record.isManuallyAdjusted,
     warningMessages: getStringArraySnapshotValue(record.finalSchemeSnapshot, "warningMessages"),
+    ...(getSelectionReasonSnapshotValue(record.finalSchemeSnapshot) !== undefined
+      ? { selectionReason: getSelectionReasonSnapshotValue(record.finalSchemeSnapshot) }
+      : {}),
     exportRecords: record.exportRecords,
+  };
+}
+
+function getSelectionReasonSnapshotValue(snapshot: SnapshotObject): SelectionReason | undefined {
+  const value = snapshot.selectionReason;
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    return {
+      source: "template",
+      sourceLabel: "模板生成",
+      text: value.trim(),
+      generatedAt: new Date(0).toISOString(),
+    };
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const candidate = value as Partial<SelectionReason>;
+
+  if (
+    (candidate.source !== "ai" && candidate.source !== "template") ||
+    (candidate.sourceLabel !== "AI 生成" && candidate.sourceLabel !== "模板生成") ||
+    typeof candidate.text !== "string" ||
+    candidate.text.trim().length === 0 ||
+    typeof candidate.generatedAt !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    source: candidate.source,
+    sourceLabel: candidate.sourceLabel,
+    text: candidate.text,
+    ...(candidate.fallbackReason !== undefined ? { fallbackReason: candidate.fallbackReason } : {}),
+    generatedAt: candidate.generatedAt,
   };
 }
 
@@ -369,7 +413,9 @@ function normalizeExportRecords(value: unknown): MatchingSchemeExportRecord[] {
     const candidate = item as Partial<MatchingSchemeExportRecord>;
 
     return (
-      (candidate.type === "full_report" || candidate.type === "summary_sheet") &&
+      (candidate.type === "full_report" ||
+        candidate.type === "summary_sheet" ||
+        candidate.type === "scheme_excel") &&
       typeof candidate.exportedAt === "string"
     );
   });

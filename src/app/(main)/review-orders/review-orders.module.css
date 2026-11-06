@@ -1,0 +1,161 @@
+.page {
+  display: grid;
+  gap: 16px;
+  max-width: 1180px;
+}
+
+.header {
+  background: linear-gradient(135deg, #fff, #eef5ff);
+  border: 1px solid #d5e5ff;
+  border-radius: 16px;
+  box-shadow: var(--app-shadow);
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+}
+
+.header h1 {
+  font-size: 24px;
+  letter-spacing: 0;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.header p {
+  color: var(--app-muted);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.formPanel,
+.listPanel {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.sectionTitle {
+  font-size: 17px;
+  margin: 0;
+}
+
+.formGrid {
+  display: grid;
+  gap: 10px 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.wideField {
+  grid-column: 1 / -1;
+}
+
+.formGrid :global(.ant-form-item) {
+  margin-bottom: 0;
+}
+
+.formGrid :global(.ant-form-item-label) {
+  padding-bottom: 6px;
+}
+
+.formGrid :global(.ant-form-item-label > label) {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.formGrid :global(.ant-input),
+.formGrid :global(.ant-select-selector),
+.nativeSelect {
+  background: var(--app-surface-muted) !important;
+  border-color: var(--app-border) !important;
+  border-radius: 10px !important;
+  min-height: 42px;
+}
+
+.nativeSelect {
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
+  cursor: pointer;
+  font: inherit;
+  padding: 0 34px 0 12px;
+  width: 100%;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.actions :global(.ant-btn) {
+  border-radius: 10px;
+  min-height: 42px;
+}
+
+.orderList {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.orderItem {
+  background: var(--app-surface-muted);
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.orderHead {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.orderTitle {
+  color: var(--app-text);
+  font-size: 14px;
+}
+
+.orderMeta {
+  color: var(--app-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 12px;
+}
+
+.statusBadge {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 2px 8px;
+}
+
+.emptyText {
+  color: var(--app-text-muted);
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .formGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}

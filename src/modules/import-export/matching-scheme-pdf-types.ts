@@ -1,14 +1,19 @@
-export type MatchingSchemePdfExportType = "full_report" | "summary_sheet";
+import type {
+  MatchingSchemeExportRecord,
+  MatchingSchemeExportType,
+} from "@/modules/import-export/matching-scheme-export-types";
+
+export type MatchingSchemePdfExportType = Extract<
+  MatchingSchemeExportType,
+  "full_report" | "summary_sheet"
+>;
 
 export const matchingSchemePdfExportTypeLabels = {
   full_report: "完整报告",
   summary_sheet: "精简方案表",
 } satisfies Record<MatchingSchemePdfExportType, string>;
 
-export interface MatchingSchemeExportRecord {
-  type: MatchingSchemePdfExportType;
-  exportedAt: string;
-}
+export type { MatchingSchemeExportRecord };
 
 export interface MatchingSchemePdfLabeledValue {
   label: string;

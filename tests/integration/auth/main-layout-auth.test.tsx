@@ -58,7 +58,7 @@ function createSession(now: Date) {
   });
 }
 
-describe("main app access protection", () => {
+describe("main app miniapp shell", () => {
   afterEach(() => {
     cleanup();
   });
@@ -69,50 +69,56 @@ describe("main app access protection", () => {
     mockSessionCookie();
   });
 
-  it("keeps the home page redirecting to dashboard", () => {
-    expect(() => HomePage()).toThrow("NEXT_REDIRECT:/dashboard");
-    expect(mocks.redirect).toHaveBeenCalledWith("/dashboard");
+  it("keeps the home page redirecting to the public matching page", () => {
+    expect(() => HomePage()).toThrow("NEXT_REDIRECT:/matching");
+    expect(mocks.redirect).toHaveBeenCalledWith("/matching");
   });
 
-  it("redirects an unauthenticated visitor to login before rendering app navigation", async () => {
-    await expect(async () => MainLayout({ children: <div>工作台内容</div> })).rejects.toThrow(
-      "NEXT_REDIRECT:/login",
-    );
+  it("renders the miniapp shell and matching content for unauthenticated visitors", async () => {
+    render(await MainLayout({ children: <div>配纸页面内容</div> }));
 
-    expect(mocks.redirect).toHaveBeenCalledWith("/login");
-    expect(screen.queryByText("工作台")).toBeNull();
+    expect(mocks.redirect).not.toHaveBeenCalled();
+    expect(screen.getByText("纸箱自动配纸工具")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "底部模块导航" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "配纸" }).getAttribute("href")).toBe("/matching");
+    expect(screen.getByRole("link", { name: "历史方案" }).getAttribute("href")).toBe("/history");
+    expect(screen.queryByRole("link", { name: /数据管理/ })).toBeNull();
+    expect(screen.getByText("未登录")).toBeTruthy();
+    expect(screen.queryByText("需登录")).toBeNull();
+    expect(screen.queryByRole("button", { name: "退出登录" })).toBeNull();
+    expect(screen.getByText("配纸页面内容")).toBeTruthy();
   });
 
-  it("redirects a tampered session to login", async () => {
+  it("keeps rendering the public shell for a tampered session", async () => {
     mockSessionCookie("tampered.session");
 
-    await expect(async () => MainLayout({ children: <div>工作台内容</div> })).rejects.toThrow(
-      "NEXT_REDIRECT:/login",
-    );
+    render(await MainLayout({ children: <div>配纸页面内容</div> }));
 
-    expect(mocks.redirect).toHaveBeenCalledWith("/login");
+    expect(mocks.redirect).not.toHaveBeenCalled();
+    expect(screen.getByText("未登录")).toBeTruthy();
+    expect(screen.getByText("配纸页面内容")).toBeTruthy();
   });
 
-  it("redirects an expired session to login with an expired reason", async () => {
+  it("keeps rendering the public shell for an expired session", async () => {
     const expiredSession = createSession(new Date("2026-06-20T00:00:00.000Z"));
     mockSessionCookie(expiredSession.value);
 
-    await expect(async () => MainLayout({ children: <div>工作台内容</div> })).rejects.toThrow(
-      "NEXT_REDIRECT:/login?reason=expired",
-    );
+    render(await MainLayout({ children: <div>配纸页面内容</div> }));
 
-    expect(mocks.redirect).toHaveBeenCalledWith("/login?reason=expired");
+    expect(mocks.redirect).not.toHaveBeenCalled();
+    expect(screen.getByText("未登录")).toBeTruthy();
+    expect(screen.getByText("配纸页面内容")).toBeTruthy();
   });
 
-  it("renders the main layout and child content with a valid session", async () => {
+  it("renders login status and logout control with a valid session", async () => {
     const validSession = createSession(new Date());
     mockSessionCookie(validSession.value);
 
-    render(await MainLayout({ children: <div>工作台内容</div> }));
+    render(await MainLayout({ children: <div>历史方案内容</div> }));
 
     expect(screen.getByText("纸箱自动配纸工具")).toBeTruthy();
-    expect(screen.getByText("工作台")).toBeTruthy();
+    expect(screen.getByText("已登录")).toBeTruthy();
     expect(screen.getByRole("button", { name: "退出登录" })).toBeTruthy();
-    expect(screen.getByText("工作台内容")).toBeTruthy();
+    expect(screen.getByText("历史方案内容")).toBeTruthy();
   });
 });

@@ -3,21 +3,21 @@ import type {
   CandidateEvaluation,
   EligibleCandidateEvaluation,
   MatchingCandidate,
+  StrengthRequirement,
 } from "@/modules/calculations/types";
+import type { NormalizedBoxSpec } from "@/modules/box-spec/types";
 
-import type {
-  BalancedCandidateScore,
-  HistoricalHabitSelectionContext,
-  RecommendationHistoricalHabitInfo,
-  RecommendationOptions,
-} from "./types";
+import { compareCompanyPaperPrinciplePreference } from "./company-paper-principles";
+import type { RecommendationOptions } from "./types";
 
 const COST_EPSILON = 0.0001;
 
 const DEFAULT_RECOMMENDATION_OPTIONS: RecommendationOptions = {
-  balancedCostWeight: 0.5,
-  balancedSafetyWeight: 0.5,
-  maxSafetySurplusRate: 2,
+  standardTargetMinSurplusRate: 1.1,
+  standardTargetMaxSurplusRate: 1.5,
+  enhancedTargetMinSurplusRate: 1.5,
+  enhancedTargetMaxSurplusRate: 2,
+  costDownMinStrengthRatioToStandard: 0.9,
 };
 
 export function createCandidateFingerprint(evaluation: CandidateEvaluation): string {
@@ -28,160 +28,170 @@ export function createMatchingCandidateFingerprint(candidate: MatchingCandidate)
   return [
     candidate.layerCount,
     candidate.fluteType,
-    ...candidate.layers.map((layer) =>
-      [layer.role, layer.flute ?? "", layer.paper.id].join(":"),
-    ),
+    ...candidate.layers.map((layer) => [layer.role, layer.flute ?? "", layer.paper.id].join(":")),
   ].join("|");
 }
 
-export function calculateSafetySurplusRate(
+export function calculateWeakestStrengthSurplusRate(
   evaluation: EligibleCandidateEvaluation,
   parameters: CalculationParameters,
 ): number {
-  const threshold = parameters.strengthThresholds[evaluation.candidate.layerCount].minBctN;
+  const strengthRequirement = resolveStrengthRequirementForEvaluation(evaluation, parameters);
+  const rates = [
+    toSurplusRate(evaluation.strength.bctN, strengthRequirement.minBctN),
+    toSurplusRate(evaluation.strength.edgeCrushKnPerM, strengthRequirement.minEdgeCrushKnPerM),
+    toSurplusRate(evaluation.strength.burstStrength, strengthRequirement.minBurstStrength),
+  ];
 
-  if (!Number.isFinite(threshold) || threshold <= 0) {
-    return 0;
-  }
-
-  return evaluation.strength.bctN / threshold;
+  return Math.min(...rates);
 }
 
-export function sortCandidatesByEconomy(
+export function sortCandidatesByStandard(
   evaluations: EligibleCandidateEvaluation[],
   parameters: CalculationParameters,
-  historicalHabitContext?: HistoricalHabitSelectionContext | undefined,
+  options: Partial<RecommendationOptions> = {},
+  boxSpec?: NormalizedBoxSpec | undefined,
 ): EligibleCandidateEvaluation[] {
-  return sortHistoricalMatchesFirst(evaluations, historicalHabitContext, (items) =>
-    [...items].sort((first, second) => {
+  const resolvedOptions = resolveRecommendationOptions(options);
+
+  return [...evaluations].sort((first, second) => {
+    const firstSurplus = calculateWeakestStrengthSurplusRate(first, parameters);
+    const secondSurplus = calculateWeakestStrengthSurplusRate(second, parameters);
+    const flutePreferenceDifference = compareByContextualFlutePreference(first, second, boxSpec);
+
+    if (flutePreferenceDifference !== 0) {
+      return flutePreferenceDifference;
+    }
+
+    const companyPreferenceDifference = compareByCompanyPaperPrinciples(first, second, boxSpec);
+
+    if (companyPreferenceDifference !== 0) {
+      return companyPreferenceDifference;
+    }
+
+    const targetDifference = compareByTargetSurplusRange(
+      firstSurplus,
+      secondSurplus,
+      resolvedOptions.standardTargetMinSurplusRate ?? 1.1,
+      resolvedOptions.standardTargetMaxSurplusRate ?? 1.5,
+    );
+
+    if (targetDifference !== 0) {
+      return targetDifference;
+    }
+
     const costDifference = first.cost.taxIncludedCostYuan - second.cost.taxIncludedCostYuan;
 
     if (Math.abs(costDifference) >= COST_EPSILON) {
       return costDifference;
     }
 
-    const firstSurplusRate = calculateSafetySurplusRate(first, parameters);
-    const secondSurplusRate = calculateSafetySurplusRate(second, parameters);
-    const surplusDifference = firstSurplusRate - secondSurplusRate;
-
-    if (Math.abs(surplusDifference) >= COST_EPSILON) {
-      return surplusDifference;
-    }
-
     return compareByFingerprint(first, second);
-    }),
-  );
-}
-
-export function sortCandidatesBySafety(
-  evaluations: EligibleCandidateEvaluation[],
-  parameters: CalculationParameters,
-  options: Partial<RecommendationOptions> = {},
-  historicalHabitContext?: HistoricalHabitSelectionContext | undefined,
-): EligibleCandidateEvaluation[] {
-  const resolvedOptions = resolveRecommendationOptions(options);
-
-  const candidatesUnderLimit = evaluations
-    .filter(
-      (evaluation) =>
-        calculateSafetySurplusRate(evaluation, parameters) <= resolvedOptions.maxSafetySurplusRate,
-    )
-  return sortHistoricalMatchesFirst(candidatesUnderLimit, historicalHabitContext, (items) =>
-    [...items].sort((first, second) => {
-      const surplusDifference =
-        calculateSafetySurplusRate(second, parameters) - calculateSafetySurplusRate(first, parameters);
-
-      if (Math.abs(surplusDifference) >= COST_EPSILON) {
-        return surplusDifference;
-      }
-
-      const costDifference = first.cost.taxIncludedCostYuan - second.cost.taxIncludedCostYuan;
-
-      if (Math.abs(costDifference) >= COST_EPSILON) {
-        return costDifference;
-      }
-
-      return compareByFingerprint(first, second);
-    }),
-  );
-}
-
-export function scoreBalancedCandidates(
-  evaluations: EligibleCandidateEvaluation[],
-  parameters: CalculationParameters,
-  options: Partial<RecommendationOptions> = {},
-  historicalHabitContext?: HistoricalHabitSelectionContext | undefined,
-): BalancedCandidateScore[] {
-  const resolvedOptions = resolveRecommendationOptions(
-    historicalHabitContext
-      ? {
-          balancedCostWeight: 0.3,
-          balancedSafetyWeight: 0.3,
-          historicalHabitWeight: 0.4,
-          ...options,
-        }
-      : options,
-  );
-  const costs = evaluations.map((evaluation) => evaluation.cost.taxIncludedCostYuan);
-  const cappedSurplusRates = evaluations.map((evaluation) =>
-    Math.min(
-      calculateSafetySurplusRate(evaluation, parameters),
-      resolvedOptions.maxSafetySurplusRate,
-    ),
-  );
-  const minCost = Math.min(...costs);
-  const maxCost = Math.max(...costs);
-  const minSurplusRate = Math.min(...cappedSurplusRates);
-  const maxSurplusRate = Math.max(...cappedSurplusRates);
-
-  return evaluations.map((evaluation, index) => {
-    const costScore = normalizeInvertedScore(
-      evaluation.cost.taxIncludedCostYuan,
-      minCost,
-      maxCost,
-    );
-    const safetyScore = normalizeScore(cappedSurplusRates[index] ?? 0, minSurplusRate, maxSurplusRate);
-    const historicalHabitScore = historicalHabitContext
-      ? getHistoricalHabitScore(evaluation, historicalHabitContext)
-      : undefined;
-
-    return {
-      evaluation,
-      costScore,
-      safetyScore,
-      historicalHabitScore,
-      balancedScore:
-        costScore * resolvedOptions.balancedCostWeight +
-        safetyScore * resolvedOptions.balancedSafetyWeight +
-        (historicalHabitScore ?? 0) * (resolvedOptions.historicalHabitWeight ?? 0),
-    };
   });
 }
 
-export function sortCandidatesByBalanced(
+export function sortCandidatesByCostDown(
+  evaluations: EligibleCandidateEvaluation[],
+  standard: EligibleCandidateEvaluation | undefined,
+  parameters: CalculationParameters,
+  options: Partial<RecommendationOptions> = {},
+  boxSpec?: NormalizedBoxSpec | undefined,
+): EligibleCandidateEvaluation[] {
+  const resolvedOptions = resolveRecommendationOptions(options);
+  const standardCost = standard?.cost.taxIncludedCostYuan;
+  const standardWeakestSurplus = standard
+    ? calculateWeakestStrengthSurplusRate(standard, parameters)
+    : undefined;
+  const minimumStrengthRatio = resolvedOptions.costDownMinStrengthRatioToStandard ?? 0.9;
+
+  const candidates = evaluations.filter((evaluation) => {
+    if (
+      standard &&
+      createMatchingCandidateFingerprint(evaluation.candidate) ===
+        createMatchingCandidateFingerprint(standard.candidate)
+    ) {
+      return false;
+    }
+
+    if (
+      standardCost !== undefined &&
+      evaluation.cost.taxIncludedCostYuan >= standardCost - COST_EPSILON
+    ) {
+      return false;
+    }
+
+    if (standardWeakestSurplus !== undefined) {
+      const weakestSurplus = calculateWeakestStrengthSurplusRate(evaluation, parameters);
+
+      return weakestSurplus >= standardWeakestSurplus * minimumStrengthRatio;
+    }
+
+    return true;
+  });
+
+  return [...candidates].sort((first, second) => {
+    const firstLayerReductionRank = getLayerReductionRank(first, standard);
+    const secondLayerReductionRank = getLayerReductionRank(second, standard);
+    const reductionDifference = firstLayerReductionRank - secondLayerReductionRank;
+
+    if (reductionDifference !== 0) {
+      return reductionDifference;
+    }
+
+    const companyPreferenceDifference = compareByCompanyPaperPrinciples(first, second, boxSpec);
+
+    if (companyPreferenceDifference !== 0) {
+      return companyPreferenceDifference;
+    }
+
+    const costDifference = first.cost.taxIncludedCostYuan - second.cost.taxIncludedCostYuan;
+
+    if (Math.abs(costDifference) >= COST_EPSILON) {
+      return costDifference;
+    }
+
+    return compareByFingerprint(first, second);
+  });
+}
+
+export function sortCandidatesByEnhanced(
   evaluations: EligibleCandidateEvaluation[],
   parameters: CalculationParameters,
   options: Partial<RecommendationOptions> = {},
-  historicalHabitContext?: HistoricalHabitSelectionContext | undefined,
+  boxSpec?: NormalizedBoxSpec | undefined,
 ): EligibleCandidateEvaluation[] {
-  return scoreBalancedCandidates(evaluations, parameters, options, historicalHabitContext)
-    .sort((first, second) => {
-      const scoreDifference = second.balancedScore - first.balancedScore;
+  const resolvedOptions = resolveRecommendationOptions(options);
 
-      if (Math.abs(scoreDifference) >= COST_EPSILON) {
-        return scoreDifference;
-      }
+  return [...evaluations].sort((first, second) => {
+    const firstSurplus = calculateWeakestStrengthSurplusRate(first, parameters);
+    const secondSurplus = calculateWeakestStrengthSurplusRate(second, parameters);
+    const targetDifference =
+      compareByEnhancedFlutePreference(first, second) ||
+      compareByTargetSurplusRange(
+        firstSurplus,
+        secondSurplus,
+        resolvedOptions.enhancedTargetMinSurplusRate ?? 1.5,
+        resolvedOptions.enhancedTargetMaxSurplusRate ?? 2,
+      );
 
-      const costDifference =
-        first.evaluation.cost.taxIncludedCostYuan - second.evaluation.cost.taxIncludedCostYuan;
+    if (targetDifference !== 0) {
+      return targetDifference;
+    }
 
-      if (Math.abs(costDifference) >= COST_EPSILON) {
-        return costDifference;
-      }
+    const companyPreferenceDifference = compareByCompanyPaperPrinciples(first, second, boxSpec);
 
-      return compareByFingerprint(first.evaluation, second.evaluation);
-    })
-    .map((score) => score.evaluation);
+    if (companyPreferenceDifference !== 0) {
+      return companyPreferenceDifference;
+    }
+
+    const costDifference = first.cost.taxIncludedCostYuan - second.cost.taxIncludedCostYuan;
+
+    if (Math.abs(costDifference) >= COST_EPSILON) {
+      return costDifference;
+    }
+
+    return compareByFingerprint(first, second);
+  });
 }
 
 function resolveRecommendationOptions(
@@ -193,94 +203,193 @@ function resolveRecommendationOptions(
   };
 }
 
-function sortHistoricalMatchesFirst(
-  evaluations: EligibleCandidateEvaluation[],
-  historicalHabitContext: HistoricalHabitSelectionContext | undefined,
-  sort: (items: EligibleCandidateEvaluation[]) => EligibleCandidateEvaluation[],
-): EligibleCandidateEvaluation[] {
-  if (!historicalHabitContext || historicalHabitContext.status !== "available") {
-    return sort(evaluations);
-  }
-
-  const historicalMatches = evaluations.filter((evaluation) =>
-    hasHistoricalHabitMatch(evaluation, historicalHabitContext),
-  );
-  const otherCandidates = evaluations.filter(
-    (evaluation) => !hasHistoricalHabitMatch(evaluation, historicalHabitContext),
-  );
-
-  if (historicalMatches.length === 0) {
-    return sort(evaluations);
-  }
-
-  return [...sort(historicalMatches), ...sort(otherCandidates)];
-}
-
-function hasHistoricalHabitMatch(
-  evaluation: EligibleCandidateEvaluation,
-  historicalHabitContext: HistoricalHabitSelectionContext,
-): boolean {
-  const info =
-    historicalHabitContext.historicalHabitByCandidateFingerprint[
-      createMatchingCandidateFingerprint(evaluation.candidate)
-    ];
-
-  return info !== undefined && info.level !== "insufficient";
-}
-
-function getHistoricalHabitScore(
-  evaluation: EligibleCandidateEvaluation,
-  historicalHabitContext: HistoricalHabitSelectionContext,
-): number {
-  const info =
-    historicalHabitContext.historicalHabitByCandidateFingerprint[
-      createMatchingCandidateFingerprint(evaluation.candidate)
-    ];
-
-  return getHistoricalHabitLevelScore(info);
-}
-
-function getHistoricalHabitLevelScore(
-  info: RecommendationHistoricalHabitInfo | undefined,
-): number {
-  if (!info) {
-    return 0;
-  }
-
-  if (info.level === "high") {
-    return 1;
-  }
-
-  if (info.level === "medium") {
-    return 0.65;
-  }
-
-  if (info.level === "low") {
-    return 0.2;
-  }
-
-  return 0;
-}
-
-function normalizeInvertedScore(value: number, min: number, max: number): number {
-  if (Math.abs(max - min) < COST_EPSILON) {
-    return 1;
-  }
-
-  return (max - value) / (max - min);
-}
-
-function normalizeScore(value: number, min: number, max: number): number {
-  if (Math.abs(max - min) < COST_EPSILON) {
-    return 1;
-  }
-
-  return (value - min) / (max - min);
-}
-
 function compareByFingerprint(
   first: EligibleCandidateEvaluation,
   second: EligibleCandidateEvaluation,
 ): number {
   return createCandidateFingerprint(first).localeCompare(createCandidateFingerprint(second));
+}
+
+function compareByCompanyPaperPrinciples(
+  first: EligibleCandidateEvaluation,
+  second: EligibleCandidateEvaluation,
+  boxSpec: NormalizedBoxSpec | undefined,
+): number {
+  if (!boxSpec) {
+    return 0;
+  }
+
+  return compareCompanyPaperPrinciplePreference(first.candidate, second.candidate, boxSpec);
+}
+
+function toSurplusRate(value: number, threshold: number): number {
+  if (!Number.isFinite(value) || !Number.isFinite(threshold) || threshold <= 0) {
+    return 0;
+  }
+
+  return value / threshold;
+}
+
+function compareByTargetSurplusRange(
+  firstSurplus: number,
+  secondSurplus: number,
+  min: number,
+  max: number,
+): number {
+  const firstInRange = firstSurplus >= min && firstSurplus <= max;
+  const secondInRange = secondSurplus >= min && secondSurplus <= max;
+
+  if (firstInRange !== secondInRange) {
+    return firstInRange ? -1 : 1;
+  }
+
+  const target = (min + max) / 2;
+  const firstDistance = Math.abs(firstSurplus - target);
+  const secondDistance = Math.abs(secondSurplus - target);
+  const distanceDifference = firstDistance - secondDistance;
+
+  if (Math.abs(distanceDifference) >= COST_EPSILON) {
+    return distanceDifference;
+  }
+
+  return firstSurplus - secondSurplus;
+}
+
+function compareByContextualFlutePreference(
+  first: EligibleCandidateEvaluation,
+  second: EligibleCandidateEvaluation,
+  boxSpec: NormalizedBoxSpec | undefined,
+): number {
+  return (
+    getContextualFlutePreferenceRank(first.candidate.fluteType, boxSpec) -
+    getContextualFlutePreferenceRank(second.candidate.fluteType, boxSpec)
+  );
+}
+
+function compareByEnhancedFlutePreference(
+  first: EligibleCandidateEvaluation,
+  second: EligibleCandidateEvaluation,
+): number {
+  return (
+    getEnhancedFlutePreferenceRank(first.candidate.fluteType) -
+    getEnhancedFlutePreferenceRank(second.candidate.fluteType)
+  );
+}
+
+function getContextualFlutePreferenceRank(
+  fluteType: MatchingCandidate["fluteType"],
+  boxSpec: NormalizedBoxSpec | undefined,
+): number {
+  if (boxSpec && isLightSmallBox(boxSpec)) {
+    return getRank(fluteType, ["E", "B", "C", "A", "BE", "BC", "AB", "BA", "AC", "BAC"]);
+  }
+
+  if (boxSpec && hasHighRiskRequirement(boxSpec)) {
+    return getRank(fluteType, ["C", "A", "B", "BC", "AC", "BA", "AB", "BAC", "E", "BE"]);
+  }
+
+  return getRank(fluteType, ["B", "C", "A", "BC", "AB", "BA", "AC", "BAC", "E", "BE"]);
+}
+
+function getEnhancedFlutePreferenceRank(fluteType: MatchingCandidate["fluteType"]): number {
+  return getRank(fluteType, ["C", "A", "BC", "AC", "BA", "AB", "BAC", "B", "E", "BE"]);
+}
+
+function getRank(
+  fluteType: MatchingCandidate["fluteType"],
+  flutes: MatchingCandidate["fluteType"][],
+): number {
+  const index = flutes.indexOf(fluteType);
+
+  return index === -1 ? flutes.length : index;
+}
+
+function resolveStrengthRequirementForEvaluation(
+  evaluation: EligibleCandidateEvaluation,
+  parameters: CalculationParameters,
+): StrengthRequirement {
+  if (evaluation.strength.requirement) {
+    return evaluation.strength.requirement;
+  }
+
+  const strengthThreshold = parameters.strengthThresholds[evaluation.candidate.layerCount];
+
+  return {
+    minBctN: strengthThreshold.minBctN,
+    minEdgeCrushKnPerM: strengthThreshold.minEdgeCrushKnPerM,
+    minBurstStrength:
+      parameters.burstStrengthThresholdsByLayerCount[evaluation.candidate.layerCount],
+  };
+}
+
+function isLightSmallBox(boxSpec: NormalizedBoxSpec): boolean {
+  return (
+    boxSpec.productWeightKg <= 5 &&
+    boxSpec.lengthMm <= 300 &&
+    boxSpec.widthMm <= 200 &&
+    boxSpec.heightMm <= 150
+  );
+}
+
+function hasHighRiskRequirement(boxSpec: NormalizedBoxSpec): boolean {
+  const text = `${boxSpec.productType} ${boxSpec.specialRequirements.notes ?? ""}`;
+
+  return (
+    boxSpec.specialRequirements.punctureStrengthRequired ||
+    boxSpec.stackingRequirement.status === "required" ||
+    /贵重|易碎|抗压|强度|堆码|运输|防压/.test(text)
+  );
+}
+
+function getLayerReductionRank(
+  candidate: EligibleCandidateEvaluation,
+  standard: EligibleCandidateEvaluation | undefined,
+): number {
+  if (!standard) {
+    return 0;
+  }
+
+  const reductions = candidate.candidate.layers.map((layer, index) => {
+    const standardLayer = standard.candidate.layers[index];
+    const candidateWeight = layer.paper.gramWeightGsm;
+    const standardWeight = standardLayer?.paper.gramWeightGsm;
+
+    if (
+      typeof candidateWeight !== "number" ||
+      typeof standardWeight !== "number" ||
+      !Number.isFinite(candidateWeight) ||
+      !Number.isFinite(standardWeight)
+    ) {
+      return 0;
+    }
+
+    return standardWeight - candidateWeight;
+  });
+  const hasLargeReduction = reductions.some((reduction) => reduction > 15);
+
+  if (hasLargeReduction) {
+    return 3;
+  }
+
+  const linerReduced = candidate.candidate.layers.some((layer, index) => {
+    if (layer.role !== "outer_liner" && layer.role !== "inner_liner") {
+      return false;
+    }
+
+    return (reductions[index] ?? 0) > 0;
+  });
+
+  if (linerReduced) {
+    return 2;
+  }
+
+  const corrugatingOrMediumReduced = candidate.candidate.layers.some((layer, index) => {
+    if (layer.role !== "corrugating" && layer.role !== "medium") {
+      return false;
+    }
+
+    return (reductions[index] ?? 0) > 0;
+  });
+
+  return corrugatingOrMediumReduced ? 0 : 1;
 }

@@ -123,9 +123,9 @@ describe("validateBoxSpecInput", () => {
   });
 
   it.each([
-    ["lengthMm", { lengthMm: "" }, "纸箱长度不能为空"],
-    ["widthMm", { widthMm: "" }, "纸箱宽度不能为空"],
-    ["heightMm", { heightMm: "" }, "纸箱高度不能为空"],
+    ["lengthMm", { lengthMm: "" }, "纸箱内长不能为空"],
+    ["widthMm", { widthMm: "" }, "纸箱内宽不能为空"],
+    ["heightMm", { heightMm: "" }, "纸箱内高不能为空"],
     ["structureType", { structureType: "" }, "纸箱结构类型不能为空"],
     ["formingMethod", { formingMethod: "" }, "成箱方式不能为空"],
     ["productType", { productType: "" }, "产品类型不能为空"],
@@ -139,12 +139,12 @@ describe("validateBoxSpecInput", () => {
   );
 
   it.each([
-    [{ lengthMm: 99 }, "lengthMm", "纸箱长度允许范围为 100-2000mm"],
-    [{ lengthMm: 2001 }, "lengthMm", "纸箱长度允许范围为 100-2000mm"],
-    [{ widthMm: 99 }, "widthMm", "纸箱宽度允许范围为 100-1500mm"],
-    [{ widthMm: 1501 }, "widthMm", "纸箱宽度允许范围为 100-1500mm"],
-    [{ heightMm: 99 }, "heightMm", "纸箱高度允许范围为 100-1500mm"],
-    [{ heightMm: 1501 }, "heightMm", "纸箱高度允许范围为 100-1500mm"],
+    [{ lengthMm: 99 }, "lengthMm", "纸箱内长允许范围为 100-2000mm"],
+    [{ lengthMm: 2001 }, "lengthMm", "纸箱内长允许范围为 100-2000mm"],
+    [{ widthMm: 99 }, "widthMm", "纸箱内宽允许范围为 100-1500mm"],
+    [{ widthMm: 1501 }, "widthMm", "纸箱内宽允许范围为 100-1500mm"],
+    [{ heightMm: 99 }, "heightMm", "纸箱内高允许范围为 100-1500mm"],
+    [{ heightMm: 1501 }, "heightMm", "纸箱内高允许范围为 100-1500mm"],
     [{ productWeightKg: 0.4 }, "productWeightKg", "内装物重量允许范围为 0.5-100kg"],
     [{ productWeightKg: 100.1 }, "productWeightKg", "内装物重量允许范围为 0.5-100kg"],
   ] satisfies Array<[Partial<BoxSpecInput>, string, string]>)(
@@ -196,7 +196,7 @@ describe("validateBoxSpecInput", () => {
     expectFieldError(
       createValidInput({ lengthMm: 300, widthMm: 500 }),
       "lengthMm",
-      "纸箱长度必须大于或等于宽度",
+      "纸箱内长必须大于或等于内宽",
     );
   });
 
@@ -204,7 +204,7 @@ describe("validateBoxSpecInput", () => {
     expectFieldError(
       createValidInput({ lengthMm: 501, widthMm: 100 }),
       "widthMm",
-      "纸箱长宽比例必须在 1.0-5.0 之间",
+      "纸箱内长内宽比例必须在 1.0-5.0 之间",
     );
   });
 
@@ -222,14 +222,39 @@ describe("validateBoxSpecInput", () => {
       createValidInput({
         structureType: " 0201 ",
         productType: " 食品 ",
-        specialRequirements: " 防潮 ",
+        specialRequirements: {
+          dieCutting: true,
+          punctureStrengthRequired: true,
+          notes: " 防潮 ",
+        },
       }),
     );
 
     expect(normalizedInput).toMatchObject({
       structureType: "0201",
       productType: "食品",
-      specialRequirements: "防潮",
+      specialRequirements: {
+        dieCutting: true,
+        punctureStrengthRequired: true,
+        notes: "防潮",
+      },
+    });
+  });
+
+  it("rejects unsupported product types", () => {
+    expectFieldError(
+      createValidInput({ productType: "自定义品类" }),
+      "productType",
+      "产品类型不在支持范围内",
+    );
+  });
+
+  it("normalizes omitted structured special requirements to unchecked flags", () => {
+    const normalizedInput = expectValid(createValidInput());
+
+    expect(normalizedInput.specialRequirements).toEqual({
+      dieCutting: false,
+      punctureStrengthRequired: false,
     });
   });
 

@@ -4,9 +4,11 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { createSessionValue } from "@/modules/auth/session";
+import { createInMemoryAiReasoningRepository } from "@/modules/ai-reasoning/cache";
+import type { AiReasoningProvider } from "@/modules/ai-reasoning/generate-selection-reason";
+import type { SelectionReason } from "@/modules/ai-reasoning/types";
 import type { BoxSpecInput } from "@/modules/box-spec/types";
-import type { HistoricalHabitRecommendationContext } from "@/modules/historical-orders/recommendation-context";
-import type { HistoricalOrderHabitSummaryItem } from "@/modules/historical-orders/list-habit-summaries";
+import { validateBoxSpecInput } from "@/modules/box-spec/validate-box-spec";
 import type {
   ListRecommendablePaperMaterialsRepository,
   RecommendablePaperMaterial,
@@ -21,7 +23,7 @@ import type {
   StrengthResult,
 } from "@/modules/calculations/types";
 import type { RecommendationSlot } from "@/modules/recommendation/types";
-import { createMatchingCandidateFingerprint } from "@/modules/recommendation/scoring";
+import { createGenerationToken } from "@/modules/recommendation/generation-token";
 import {
   MATCHING_BASE_DATA_ERROR_MESSAGE,
   checkMatchingReadinessFromRepository,
@@ -30,7 +32,6 @@ import {
 } from "@/server/actions/matching-readiness";
 import {
   generateMatchingScheme,
-  recalculateAdjustedScheme,
   saveConfirmedMatchingScheme,
 } from "@/server/actions/matching-actions";
 import type {
@@ -51,6 +52,23 @@ const validEnv = {
     },
   ]),
 };
+
+function createValidGenerationToken(
+  slots: RecommendationSlot[],
+  boxSpec: BoxSpecInput = createValidInput(),
+): string {
+  const validationResult = validateBoxSpecInput(boxSpec);
+
+  if (!validationResult.ok) {
+    throw new Error("test box spec should be valid");
+  }
+
+  return createGenerationToken({
+    boxSpec: validationResult.data,
+    slots,
+    secret: sessionSecret,
+  });
+}
 
 class InMemoryMatchingReadinessRepository implements MatchingReadinessRepository {
   callCount = 0;
@@ -117,6 +135,7 @@ class InMemoryMatchingSchemeHistoryRepository implements MatchingSchemeHistoryRe
 
     return updatedRecord;
   }
+
 }
 
 function createReadiness(overrides: Partial<MatchingReadiness> = {}): MatchingReadiness {
@@ -205,6 +224,73 @@ function createCandidate(id: string): MatchingCandidate {
           priceYuanPerTon: 3000,
           burstIndex: 10,
           ringCrushIndex: 20,
+        },
+      },
+    ],
+  };
+}
+
+function createFiveLayerCandidate(id: string): MatchingCandidate {
+  return {
+    id,
+    layerCount: 5,
+    fluteType: "BC",
+    layers: [
+      {
+        role: "outer_liner",
+        paper: {
+          id: `${id}-outer`,
+          paperCode: `${id}-P1`,
+          gramWeightGsm: 230,
+          priceYuanPerTon: 3200,
+          burstIndex: 12,
+          ringCrushIndex: 24,
+        },
+      },
+      {
+        role: "corrugating",
+        flute: "B",
+        paper: {
+          id: `${id}-corrugating-b`,
+          paperCode: `${id}-W1`,
+          gramWeightGsm: 140,
+          priceYuanPerTon: 2700,
+          burstIndex: 10,
+          ringCrushIndex: 20,
+        },
+      },
+      {
+        role: "medium",
+        paper: {
+          id: `${id}-medium`,
+          paperCode: `${id}-M1`,
+          gramWeightGsm: 120,
+          priceYuanPerTon: 2600,
+          burstIndex: 8,
+          ringCrushIndex: 18,
+        },
+      },
+      {
+        role: "corrugating",
+        flute: "C",
+        paper: {
+          id: `${id}-corrugating-c`,
+          paperCode: `${id}-W2`,
+          gramWeightGsm: 140,
+          priceYuanPerTon: 2700,
+          burstIndex: 10,
+          ringCrushIndex: 20,
+        },
+      },
+      {
+        role: "inner_liner",
+        paper: {
+          id: `${id}-inner`,
+          paperCode: `${id}-P2`,
+          gramWeightGsm: 230,
+          priceYuanPerTon: 3200,
+          burstIndex: 12,
+          ringCrushIndex: 24,
         },
       },
     ],
@@ -328,7 +414,21 @@ function createRecommendationSlot(
   };
 }
 
-function createStrengthRejectedEvaluation(candidate: MatchingCandidate): RejectedCandidateEvaluation {
+function createStoredSelectionReason(
+  sourceLabel: SelectionReason["sourceLabel"],
+  text: string,
+): SelectionReason {
+  return {
+    source: sourceLabel === "AI 生成" ? "ai" : "template",
+    sourceLabel,
+    text,
+    generatedAt: "2026-07-02T00:00:00.000Z",
+  };
+}
+
+function createStrengthRejectedEvaluation(
+  candidate: MatchingCandidate,
+): RejectedCandidateEvaluation {
   return {
     status: "rejected",
     candidate,
@@ -356,82 +456,6 @@ function createStrengthRejectedEvaluation(candidate: MatchingCandidate): Rejecte
   };
 }
 
-function createDeviceRejectedEvaluation(candidate: MatchingCandidate): RejectedCandidateEvaluation {
-  return {
-    status: "rejected",
-    candidate,
-    reasons: [
-      {
-        type: "NOT_MANUFACTURABLE",
-        code: "BOARD_WIDTH_TOO_LARGE",
-        message: "纸板宽超过设备限制",
-      },
-    ],
-    area: createArea(),
-    device: {
-      isManufacturable: false,
-      reasons: [
-        {
-          type: "NOT_MANUFACTURABLE",
-          code: "BOARD_WIDTH_TOO_LARGE",
-          message: "纸板宽超过设备限制",
-        },
-      ],
-    },
-  };
-}
-
-function createDataMissingEvaluation(candidate: MatchingCandidate): RejectedCandidateEvaluation {
-  return {
-    status: "rejected",
-    candidate,
-    reasons: [
-      {
-        type: "DATA_MISSING",
-        code: "PAPER_PRICE_MISSING",
-        message: "缺少原纸价格",
-      },
-    ],
-    area: createArea(),
-    device: createDevice(),
-  };
-}
-
-function createHistoricalSummary(
-  overrides: Partial<HistoricalOrderHabitSummaryItem> = {},
-): HistoricalOrderHabitSummaryItem {
-  return {
-    importBatchId: "batch-1",
-    dimensionType: "product",
-    dimensionKey: "食品",
-    layerCount: 3,
-    flute: "B",
-    factoryNames: ["脱敏纸厂A"],
-    gramWeights: [230, 160],
-    orderCount: 8,
-    frequency: 0.62,
-    ...overrides,
-  };
-}
-
-function createHistoricalHabitContext(
-  overrides: Partial<HistoricalHabitRecommendationContext> = {},
-): HistoricalHabitRecommendationContext {
-  return {
-    status: "available",
-    importBatchId: "batch-1",
-    matchedDimensionKeys: {
-      productKey: "食品",
-      sizeBucketKey: "小箱",
-      weightBucketKey: "≤20kg",
-    },
-    similarOrderCount: 8,
-    summaries: [createHistoricalSummary()],
-    messages: [],
-    ...overrides,
-  };
-}
-
 describe("matching readiness check", () => {
   it("passes when paper factories, liner paper, corrugating paper, and formula parameters are ready", async () => {
     const readiness = createReadiness();
@@ -443,29 +467,49 @@ describe("matching readiness check", () => {
   });
 
   it.each([
-    ["paper factories", { hasPaperFactories: false }],
-    ["liner paper", { hasLinerPaper: false }],
-    ["corrugating paper", { hasCorrugatingPaper: false }],
-    ["formula parameters", { hasFormulaParameters: false }],
-  ] as const)("returns a base data field error when %s are missing", async (_label, overrides) => {
-    const result = await checkReadiness(createReadiness(overrides));
+    [
+      "paper factories",
+      { hasPaperFactories: false },
+      { scope: "paper_material", field: "factory", message: "缺少启用的纸厂或供应商资料" },
+    ],
+    [
+      "liner paper",
+      { hasLinerPaper: false },
+      { scope: "paper_material", field: "linerboard", message: "缺少完整且启用的箱板纸资料" },
+    ],
+    [
+      "corrugating paper",
+      { hasCorrugatingPaper: false },
+      { scope: "paper_material", field: "corrugating", message: "缺少完整且启用的瓦纸资料" },
+    ],
+    [
+      "formula parameters",
+      { hasFormulaParameters: false },
+      { scope: "formula_parameter", field: "formulaParameters", message: "缺少基础参数资料" },
+    ],
+  ] as const)(
+    "returns a base data field error when %s are missing",
+    async (_label, overrides, missingItem) => {
+      const result = await checkReadiness(createReadiness(overrides));
 
-    expect(result).toEqual({
-      ok: false,
-      error: {
-        code: "VALIDATION_ERROR",
-        message: MATCHING_BASE_DATA_ERROR_MESSAGE,
-        details: {
-          fieldErrors: [
-            {
-              field: "baseData",
-              message: MATCHING_BASE_DATA_ERROR_MESSAGE,
-            },
-          ],
+      expect(result).toEqual({
+        ok: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: MATCHING_BASE_DATA_ERROR_MESSAGE,
+          details: {
+            fieldErrors: [
+              {
+                field: "baseData",
+                message: MATCHING_BASE_DATA_ERROR_MESSAGE,
+              },
+            ],
+            missingItems: [missingItem],
+          },
         },
-      },
-    });
-  });
+      });
+    },
+  );
 
   it("keeps the default Drizzle readiness repository scoped to active and complete base data", () => {
     const source = readFileSync(
@@ -483,30 +527,103 @@ describe("matching readiness check", () => {
 });
 
 describe("generate matching scheme action", () => {
-  it("requires authentication before running the matching flow", async () => {
-    const readinessRepository = new InMemoryMatchingReadinessRepository(createReadiness());
-    const selectMatchingRecommendationsFn = vi.fn();
-    const getHistoricalHabitContextFn = vi.fn();
+  it("uses the paper_warehouse database adapter instead of the warehouse API or app master-data tables", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src", "server", "actions", "matching-actions.ts"),
+      "utf8",
+    );
 
+    expect(source).toContain("WarehouseDatabaseMatchingSourceDataRepository");
+    expect(source).toContain("MatchingSourceReadinessRepository");
+    expect(source).toContain("MatchingSourcePaperMaterialRepository");
+    expect(source).not.toContain("createDrizzleMatchingReadinessRepository(client.db)");
+    expect(source).not.toContain(
+      "createDrizzleListRecommendablePaperMaterialsRepository(client.db)",
+    );
+    expect(source).not.toContain("WAREHOUSE_API_TOKEN");
+  });
+
+  it("requires PostgreSQL configuration even when warehouse API variables exist", async () => {
     const result = await generateMatchingScheme(createValidInput(), {
-      env: validEnv,
-      cookieStore: { get: () => undefined },
-      readinessRepository,
-      selectMatchingRecommendationsFn,
-      getHistoricalHabitContextFn,
-      now: new Date("2026-07-01T00:00:00.000Z"),
+      env: {
+        ...validEnv,
+        WAREHOUSE_API_BASE_URL: "https://warehouse.example.test",
+        WAREHOUSE_API_TOKEN: "legacy-token-must-be-ignored",
+      },
+      cookieStore: createAuthenticatedCookieStore(),
     });
 
     expect(result).toEqual({
       ok: false,
       error: {
-        code: "AUTH_REQUIRED",
-        message: "需要先登录",
+        code: "DATABASE_URL_MISSING",
+        message: "DATABASE_URL 未配置，需要先配置数据连接信息。",
       },
     });
-    expect(readinessRepository.callCount).toBe(0);
-    expect(selectMatchingRecommendationsFn).not.toHaveBeenCalled();
-    expect(getHistoricalHabitContextFn).not.toHaveBeenCalled();
+  });
+
+  it("returns a safe database error when PostgreSQL data cannot be read", async () => {
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      readinessRepository: {
+        async getMatchingReadiness() {
+          throw new Error("password authentication failed postgresql://postgres:secret@localhost");
+        },
+      },
+      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "DATABASE_CONNECTION_FAILED",
+        message: "数据库连接不可用，请检查地址、账号、密码或网络。",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("secret");
+    expect(JSON.stringify(result)).not.toContain("postgresql://");
+  });
+
+  it("allows unauthenticated visitors to run the matching flow", async () => {
+    const readinessRepository = new InMemoryMatchingReadinessRepository(createReadiness());
+    const economySlot = createRecommendationSlot("economy");
+    const safetySlot = createRecommendationSlot("safety");
+    const balancedSlot = createRecommendationSlot("balanced");
+    const selectMatchingRecommendationsFn = vi.fn(() => ({
+      slots: [economySlot, safetySlot, balancedSlot] as [
+        RecommendationSlot,
+        RecommendationSlot,
+        RecommendationSlot,
+      ],
+      rejectedSummary: [],
+      rejectedCandidates: [],
+      globalMessages: [],
+    }));
+
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: { get: () => undefined },
+      readinessRepository,
+      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+      createCandidates: () => [createCandidate("economy")],
+      evaluateMatchingCandidatesFn: () => ({
+        eligibleCandidates: [
+          createEligibleEvaluation({
+            candidate: createCandidate("economy"),
+            costYuan: 2.13,
+            bctN: 520,
+          }),
+        ],
+        rejectedCandidates: [],
+        rejectedSummary: [],
+      }),
+      selectMatchingRecommendationsFn,
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(readinessRepository.callCount).toBe(1);
+    expect(selectMatchingRecommendationsFn).toHaveBeenCalled();
   });
 
   it("returns normalized input and excludes stacking when stacking layers are blank", async () => {
@@ -547,7 +664,7 @@ describe("generate matching scheme action", () => {
     });
   });
 
-  it("returns three recommendation slots and keeps rejected summaries", async () => {
+  it("returns the normal standard and cost-down slots and keeps rejected summaries", async () => {
     const economyCandidate = createCandidate("economy");
     const safetyCandidate = createCandidate("safety");
     const balancedCandidate = createCandidate("balanced");
@@ -611,17 +728,13 @@ describe("generate matching scheme action", () => {
       throw new Error("matching action should succeed");
     }
 
-    expect(result.data.recommendationSlots).toHaveLength(3);
+    expect(result.data.recommendationSlots).toHaveLength(2);
     expect(result.data.recommendationSlots.map((slot) => slot.title)).toEqual([
-      "经济型",
-      "安全型",
-      "均衡型",
+      "标准方案",
+      "降本方案",
     ]);
-    expect(result.data.recommendationSlots.every((slot) => slot.isOfficialRecommendation)).toBe(
-      true,
-    );
-    expect(result.data.recommendationMessages).toEqual(["暂无足够历史参考"]);
-    expect(result.data.historicalHabitStatus).toBe("unavailable");
+    expect(result.data.recommendationSlots[0]?.isOfficialRecommendation).toBe(true);
+    expect(result.data.recommendationMessages).toEqual([]);
     const serializedResult = JSON.stringify(result.data);
     expect(serializedResult).not.toContain("historicalHabitScore");
     expect(serializedResult).not.toContain("historicalReason");
@@ -643,6 +756,810 @@ describe("generate matching scheme action", () => {
         ],
       }),
     );
+  });
+
+  it("caps rejected candidate details returned to the client while keeping summaries", async () => {
+    const rejectedCandidates = Array.from({ length: 50 }, (_, index) =>
+      createStrengthRejectedEvaluation(createCandidate(`strength-rejected-${index}`)),
+    );
+    const evaluateMatchingCandidatesFn = vi.fn().mockReturnValue({
+      eligibleCandidates: [
+        createEligibleEvaluation({
+          candidate: createCandidate("eligible"),
+          costYuan: 2.1,
+          bctN: 520,
+        }),
+      ],
+      rejectedCandidates,
+      rejectedSummary: [{ type: "STRENGTH_UNQUALIFIED", label: "strength rejected", count: 50 }],
+    });
+
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+      createCandidates: () => [createCandidate("eligible")],
+      evaluateMatchingCandidatesFn,
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("matching action should succeed");
+    }
+
+    expect(result.data.rejectedSummary).toEqual([
+      { type: "STRENGTH_UNQUALIFIED", label: "strength rejected", count: 50 },
+    ]);
+    expect(result.data.rejectedCandidates).toHaveLength(20);
+    expect(result.data.rejectedCandidates[0]?.candidate.id).toBe("strength-rejected-0");
+  });
+
+  it("keeps default candidate expansion bounded for large paper libraries", async () => {
+    const liners = Array.from({ length: 50 }, (_, index) =>
+      createRecommendablePaperMaterial(`liner-${index}`, {
+        paperKind: "linerboard",
+        grade: index % 3 === 0 ? "优等品" : index % 3 === 1 ? "一等品" : "合格品",
+        gramWeightGsm: 100 + index * 5,
+        priceYuanPerTon: 3000 + index * 8,
+        burstIndex: 8 + index * 0.2,
+        ringCrushIndex: 18 + index * 0.3,
+      }),
+    );
+    const corrugatings = Array.from({ length: 20 }, (_, index) =>
+      createRecommendablePaperMaterial(`corrugating-${index}`, {
+        paperKind: "corrugating",
+        grade: index % 3 === 0 ? "优等品" : index % 3 === 1 ? "一等品" : "合格品",
+        gramWeightGsm: 80 + index * 5,
+        applicableFlutes: ["A", "B", "C", "E"],
+        priceYuanPerTon: 2600 + index * 6,
+        ringCrushIndex: 14 + index * 0.25,
+      }),
+    );
+    const observedCandidateCounts: number[] = [];
+    const evaluateMatchingCandidatesFn = vi.fn(
+      ({ candidates }: { candidates: MatchingCandidate[] }) => {
+        observedCandidateCounts.push(candidates.length);
+
+        return {
+          eligibleCandidates: [
+            createEligibleEvaluation({
+              candidate: candidates[0] ?? createCandidate("fallback"),
+              costYuan: 2.13,
+              bctN: 520,
+            }),
+          ],
+          rejectedCandidates: [],
+          rejectedSummary: [],
+        };
+      },
+    );
+
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository([...liners, ...corrugatings]),
+      evaluateMatchingCandidatesFn,
+      selectMatchingRecommendationsFn: () => ({
+        slots: [
+          createRecommendationSlot("economy"),
+          createRecommendationSlot("safety"),
+          createRecommendationSlot("balanced"),
+        ],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(observedCandidateCounts[0]).toBeGreaterThan(0);
+    expect(observedCandidateCounts[0]).toBeLessThanOrEqual(
+      36 * 36 * 20 * 4 + 16 * 16 * 8 * 12 * 12 * 5,
+    );
+    expect(observedCandidateCounts[0]).toBeLessThan(50 * 50 * 50 * 20 * 20 * 16);
+  });
+
+  it("keeps common five-layer liner weights in default candidates", async () => {
+    const lowWeightLiners = Array.from({ length: 12 }, (_, index) =>
+      createRecommendablePaperMaterial(`low-liner-${index}`, {
+        paperKind: "linerboard",
+        gramWeightGsm: 100 + index * 5,
+        priceYuanPerTon: 2800 + index,
+        burstIndex: 30 - index * 0.1,
+        ringCrushIndex: 40 - index * 0.1,
+      }),
+    );
+    const commonLiners = [
+      createRecommendablePaperMaterial("common-liner-190", {
+        paperKind: "linerboard",
+        gramWeightGsm: 190,
+        priceYuanPerTon: 3600,
+        burstIndex: 8,
+        ringCrushIndex: 18,
+      }),
+      createRecommendablePaperMaterial("common-liner-200", {
+        paperKind: "linerboard",
+        gramWeightGsm: 200,
+        priceYuanPerTon: 3650,
+        burstIndex: 8,
+        ringCrushIndex: 18,
+      }),
+      createRecommendablePaperMaterial("common-liner-250", {
+        paperKind: "linerboard",
+        gramWeightGsm: 250,
+        priceYuanPerTon: 3800,
+        burstIndex: 8,
+        ringCrushIndex: 18,
+      }),
+    ];
+    const corrugatings = [
+      createRecommendablePaperMaterial("corrugating-b", {
+        paperKind: "corrugating",
+        gramWeightGsm: 140,
+        applicableFlutes: ["B"],
+      }),
+      createRecommendablePaperMaterial("corrugating-c", {
+        paperKind: "corrugating",
+        gramWeightGsm: 140,
+        applicableFlutes: ["C"],
+      }),
+    ];
+    let observedCandidates: MatchingCandidate[] = [];
+    const evaluateMatchingCandidatesFn = vi.fn(({ candidates }) => {
+      observedCandidates = candidates;
+
+      return {
+        eligibleCandidates: [
+          createEligibleEvaluation({
+            candidate: candidates[0] ?? createCandidate("fallback"),
+            costYuan: 2.13,
+            bctN: 520,
+          }),
+        ],
+        rejectedCandidates: [],
+        rejectedSummary: [],
+      };
+    });
+
+    const result = await generateMatchingScheme(createValidInput({ productWeightKg: 25 }), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository([
+        ...lowWeightLiners,
+        ...commonLiners,
+        ...corrugatings,
+      ]),
+      evaluateMatchingCandidatesFn,
+      selectMatchingRecommendationsFn: () => ({
+        slots: [
+          createRecommendationSlot("economy"),
+          createRecommendationSlot("safety"),
+          createRecommendationSlot("balanced"),
+        ],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(
+      observedCandidates.some(
+        (candidate) =>
+          candidate.layerCount === 5 &&
+          candidate.layers.some(
+            (layer) => layer.role === "outer_liner" && layer.paper.gramWeightGsm === 190,
+          ) &&
+          candidate.layers.some(
+            (layer) => layer.role === "inner_liner" && layer.paper.gramWeightGsm === 190,
+          ),
+      ),
+    ).toBe(true);
+    expect(
+      observedCandidates.some(
+        (candidate) =>
+          candidate.layerCount === 5 &&
+          candidate.layers.some((layer) => layer.paper.gramWeightGsm === 200),
+      ),
+    ).toBe(true);
+    expect(
+      observedCandidates.some(
+        (candidate) =>
+          candidate.layerCount === 5 &&
+          candidate.layers.some((layer) => layer.paper.gramWeightGsm === 250),
+      ),
+    ).toBe(true);
+  });
+
+  it("generates five-layer candidates from the current paper library", async () => {
+    let observedCandidates: MatchingCandidate[] = [];
+    const evaluateMatchingCandidatesFn = vi.fn(({ candidates }) => {
+      observedCandidates = candidates;
+
+      return {
+        eligibleCandidates: [
+          createEligibleEvaluation({
+            candidate: candidates[0] ?? createCandidate("fallback"),
+            costYuan: 2.13,
+            bctN: 520,
+          }),
+        ],
+        rejectedCandidates: [],
+        rejectedSummary: [],
+      };
+    });
+
+    const result = await generateMatchingScheme(createValidInput({ productWeightKg: 25 }), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository([
+        createRecommendablePaperMaterial("outer-230", {
+          paperKind: "linerboard",
+          gramWeightGsm: 230,
+        }),
+        createRecommendablePaperMaterial("inner-200", {
+          paperKind: "linerboard",
+          gramWeightGsm: 200,
+        }),
+        createRecommendablePaperMaterial("medium-120", {
+          paperKind: "linerboard",
+          gramWeightGsm: 120,
+        }),
+        createRecommendablePaperMaterial("corrugating-b", {
+          paperKind: "corrugating",
+          gramWeightGsm: 140,
+          applicableFlutes: ["B"],
+        }),
+        createRecommendablePaperMaterial("corrugating-c", {
+          paperKind: "corrugating",
+          gramWeightGsm: 140,
+          applicableFlutes: ["C"],
+        }),
+      ]),
+      evaluateMatchingCandidatesFn,
+      selectMatchingRecommendationsFn: () => ({
+        slots: [
+          createRecommendationSlot("economy"),
+          createRecommendationSlot("safety"),
+          createRecommendationSlot("balanced"),
+        ],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(observedCandidates.some((candidate) => candidate.layerCount === 5)).toBe(true);
+    expect(
+      observedCandidates.some(
+        (candidate) =>
+          candidate.layerCount === 5 &&
+          candidate.layers.some((layer) => layer.role === "medium") &&
+          candidate.layers.filter((layer) => layer.role === "corrugating").length === 2,
+      ),
+    ).toBe(true);
+  });
+
+  it("only generates candidates whose outer liner is not lighter than the inner liner and stays within 20g", async () => {
+    let observedCandidates: MatchingCandidate[] = [];
+    const evaluateMatchingCandidatesFn = vi.fn(({ candidates }) => {
+      observedCandidates = candidates;
+
+      return {
+        eligibleCandidates: [
+          createEligibleEvaluation({
+            candidate: candidates[0] ?? createCandidate("fallback"),
+            costYuan: 2.13,
+            bctN: 520,
+          }),
+        ],
+        rejectedCandidates: [],
+        rejectedSummary: [],
+      };
+    });
+
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository([
+        createRecommendablePaperMaterial("liner-190", {
+          paperKind: "linerboard",
+          gramWeightGsm: 190,
+        }),
+        createRecommendablePaperMaterial("liner-200", {
+          paperKind: "linerboard",
+          gramWeightGsm: 200,
+        }),
+        createRecommendablePaperMaterial("liner-230", {
+          paperKind: "linerboard",
+          gramWeightGsm: 230,
+        }),
+        createRecommendablePaperMaterial("corrugating-b", {
+          paperKind: "corrugating",
+          gramWeightGsm: 140,
+          applicableFlutes: ["B"],
+        }),
+      ]),
+      evaluateMatchingCandidatesFn,
+      selectMatchingRecommendationsFn: () => ({
+        slots: [
+          createRecommendationSlot("economy"),
+          createRecommendationSlot("safety"),
+          createRecommendationSlot("balanced"),
+        ],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(observedCandidates.length).toBeGreaterThan(0);
+    expect(observedCandidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: expect.stringContaining("liner-200") }),
+      ]),
+    );
+    expect(observedCandidates).toEqual(
+      observedCandidates.filter((candidate) => {
+        const outerWeight = candidate.layers.find((layer) => layer.role === "outer_liner")?.paper
+          .gramWeightGsm;
+        const innerWeight = candidate.layers.find((layer) => layer.role === "inner_liner")?.paper
+          .gramWeightGsm;
+
+        return (
+          typeof outerWeight === "number" &&
+          typeof innerWeight === "number" &&
+          outerWeight >= innerWeight &&
+          outerWeight - innerWeight <= 20
+        );
+      }),
+    );
+  });
+
+  it("filters matching candidates to five-layer when product weight is above 20kg", async () => {
+    let observedCandidates: MatchingCandidate[] = [];
+    const threeLayerCandidate = createCandidate("three-layer");
+    const fiveLayerCandidate = createFiveLayerCandidate("five-layer");
+    const evaluateMatchingCandidatesFn = vi.fn(
+      ({ candidates }: { candidates: MatchingCandidate[] }) => {
+        observedCandidates = candidates;
+
+        return {
+          eligibleCandidates: candidates.map((candidate, index) =>
+            createEligibleEvaluation({
+              candidate,
+              costYuan: 2.13 + index,
+              bctN: candidate.layerCount === 5 ? 900 : 520,
+            }),
+          ),
+          rejectedCandidates: [],
+          rejectedSummary: [],
+        };
+      },
+    );
+
+    const result = await generateMatchingScheme(createValidInput({ productWeightKg: 25 }), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+      createCandidates: () => [threeLayerCandidate, fiveLayerCandidate],
+      evaluateMatchingCandidatesFn,
+      selectMatchingRecommendationsFn: () => ({
+        slots: [
+          createRecommendationSlot("economy"),
+          createRecommendationSlot("safety"),
+          createRecommendationSlot("balanced"),
+        ],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(observedCandidates.map((candidate) => candidate.layerCount)).toEqual([5]);
+  });
+
+  it("generates seven-layer BAC candidates for product weight above 30kg", async () => {
+    let observedCandidates: MatchingCandidate[] = [];
+    const evaluateMatchingCandidatesFn = vi.fn(({ candidates }) => {
+      observedCandidates = candidates;
+
+      return {
+        eligibleCandidates: [
+          createEligibleEvaluation({
+            candidate: candidates[0] ?? createCandidate("fallback"),
+            costYuan: 3.45,
+            bctN: 1300,
+          }),
+        ],
+        rejectedCandidates: [],
+        rejectedSummary: [],
+      };
+    });
+
+    const result = await generateMatchingScheme(createValidInput({ productWeightKg: 31 }), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository([
+        createRecommendablePaperMaterial("outer-250", {
+          paperKind: "linerboard",
+          gramWeightGsm: 250,
+        }),
+        createRecommendablePaperMaterial("inner-250", {
+          paperKind: "linerboard",
+          gramWeightGsm: 250,
+        }),
+        createRecommendablePaperMaterial("medium-120", {
+          paperKind: "linerboard",
+          gramWeightGsm: 120,
+        }),
+        createRecommendablePaperMaterial("corrugating-b", {
+          paperKind: "corrugating",
+          gramWeightGsm: 150,
+          applicableFlutes: ["B"],
+        }),
+        createRecommendablePaperMaterial("corrugating-a", {
+          paperKind: "corrugating",
+          gramWeightGsm: 150,
+          applicableFlutes: ["A"],
+        }),
+        createRecommendablePaperMaterial("corrugating-c", {
+          paperKind: "corrugating",
+          gramWeightGsm: 150,
+          applicableFlutes: ["C"],
+        }),
+      ]),
+      evaluateMatchingCandidatesFn,
+      selectMatchingRecommendationsFn: () => ({
+        slots: [
+          createRecommendationSlot("economy"),
+          createRecommendationSlot("safety"),
+          createRecommendationSlot("balanced"),
+        ],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(observedCandidates.length).toBeGreaterThan(0);
+    expect(observedCandidates.every((candidate) => candidate.layerCount === 7)).toBe(true);
+    expect(
+      observedCandidates.some(
+        (candidate) => candidate.layerCount === 7 && candidate.fluteType === "BAC",
+      ),
+    ).toBe(true);
+  });
+
+  it("attaches template selection reasons to every recommendation slot by default", async () => {
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+      selectMatchingRecommendationsFn: () => ({
+        slots: [
+          createRecommendationSlot("economy"),
+          createRecommendationSlot("safety"),
+          createRecommendationSlot("balanced"),
+        ],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      now: new Date("2026-07-04T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("matching action should succeed");
+    }
+
+    expect(result.data.recommendationSlots).toHaveLength(3);
+    expect(
+      result.data.recommendationSlots.every(
+        (slot) =>
+          slot.selectionReason?.sourceLabel === "模板生成" && slot.selectionReason.text.length > 0,
+      ),
+    ).toBe(true);
+  });
+
+  it("uses AI generated selection reasons when the provider succeeds", async () => {
+    const provider: AiReasoningProvider = {
+      async generateSelectionReason({ facts }) {
+        return {
+          text: `该${facts.strategyLabel}方案成本较低，强度满足要求，可生产。`,
+        };
+      },
+    };
+
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+      selectMatchingRecommendationsFn: () => ({
+        slots: [
+          createRecommendationSlot("economy"),
+          createRecommendationSlot("safety"),
+          createRecommendationSlot("balanced"),
+        ],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      aiReasoningProvider: provider,
+      aiReasoningRepository: createInMemoryAiReasoningRepository(),
+      now: new Date("2026-07-04T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("matching action should succeed");
+    }
+
+    expect(
+      result.data.recommendationSlots.map((slot) => slot.selectionReason?.sourceLabel),
+    ).toEqual(["AI 生成", "AI 生成", "AI 生成"]);
+    expect(result.data.recommendationSlots[0]!.selectionReason?.text).toContain("经济型");
+  });
+
+  it("uses the configured AI provider from environment variables", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            model: "test-model",
+            output_text: "该方案成本较低，强度满足要求，可生产。",
+          }),
+          { status: 200 },
+        ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const result = await generateMatchingScheme(createValidInput(), {
+        env: {
+          ...validEnv,
+          AI_PROVIDER_API_KEY: "test-key",
+          AI_PROVIDER_BASE_URL: "https://ai.example/v1",
+          AI_REASONING_MODEL: "test-model",
+          AI_REASONING_TIMEOUT_MS: "1500",
+          AI_REASONING_DAILY_LIMIT: "100",
+        },
+        cookieStore: createAuthenticatedCookieStore(),
+        readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+        paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+        selectMatchingRecommendationsFn: () => ({
+          slots: [
+            createRecommendationSlot("economy"),
+            createRecommendationSlot("safety"),
+            createRecommendationSlot("balanced"),
+          ],
+          rejectedSummary: [],
+          rejectedCandidates: [],
+          globalMessages: [],
+        }),
+        now: new Date("2026-07-04T00:00:00.000Z"),
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        throw new Error("matching action should succeed");
+      }
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(
+        result.data.recommendationSlots.map((slot) => slot.selectionReason?.sourceLabel),
+      ).toEqual(["AI 生成", "AI 生成", "AI 生成"]);
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(url).toBe("https://ai.example/v1/responses");
+      expect(init.headers).toMatchObject({
+        Authorization: "Bearer test-key",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps matching result successful and falls back to template when provider fails", async () => {
+    const provider: AiReasoningProvider = {
+      async generateSelectionReason() {
+        throw new Error("provider failed");
+      },
+    };
+
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+      selectMatchingRecommendationsFn: () => ({
+        slots: [
+          createRecommendationSlot("economy"),
+          createRecommendationSlot("safety"),
+          createRecommendationSlot("balanced"),
+        ],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      aiReasoningProvider: provider,
+      aiReasoningRepository: createInMemoryAiReasoningRepository(),
+      now: new Date("2026-07-04T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("matching action should succeed");
+    }
+
+    expect(
+      result.data.recommendationSlots.map((slot) => slot.selectionReason?.fallbackReason),
+    ).toEqual(["provider_failed", "provider_failed", "provider_failed"]);
+  });
+
+  it("does not call provider and falls back to template when daily limit is reached", async () => {
+    const provider: AiReasoningProvider = {
+      generateSelectionReason: vi.fn(async () => ({
+        text: "该经济型方案成本较低，强度满足要求，可生产。",
+      })),
+    };
+
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+      selectMatchingRecommendationsFn: () => ({
+        slots: [
+          createRecommendationSlot("economy"),
+          createRecommendationSlot("safety"),
+          createRecommendationSlot("balanced"),
+        ],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      aiReasoningProvider: provider,
+      aiReasoningRepository: createInMemoryAiReasoningRepository({
+        dailyUsages: {
+          "2026-07-04": 100,
+        },
+      }),
+      aiReasoningOptions: { dailyLimit: 100 },
+      now: new Date("2026-07-04T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("matching action should succeed");
+    }
+
+    expect(provider.generateSelectionReason).not.toHaveBeenCalled();
+    expect(
+      result.data.recommendationSlots.map((slot) => slot.selectionReason?.fallbackReason),
+    ).toEqual(["daily_limit_reached", "daily_limit_reached", "daily_limit_reached"]);
+  });
+
+  it("creates template reasons for unavailable slots without calling provider for that slot", async () => {
+    const provider: AiReasoningProvider = {
+      generateSelectionReason: vi.fn(async ({ facts }) => ({
+        text: `该${facts.strategyLabel}方案成本较低，强度满足要求，可生产。`,
+      })),
+    };
+    const economySlot = createRecommendationSlot("economy");
+    const unavailableSlot: RecommendationSlot = {
+      strategy: "safety",
+      title: "安全型" as RecommendationSlot["title"],
+      status: "unavailable",
+      isOfficialRecommendation: false,
+      messages: [],
+      unavailableReasons: [
+        {
+          type: "PARAMETER_ERROR",
+          code: "NO_SAFETY_CANDIDATE",
+          message: "没有可展示的参考方案",
+        },
+      ],
+    };
+
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+      selectMatchingRecommendationsFn: () => ({
+        slots: [economySlot, unavailableSlot, createRecommendationSlot("balanced")],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      aiReasoningProvider: provider,
+      aiReasoningRepository: createInMemoryAiReasoningRepository(),
+      now: new Date("2026-07-04T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("matching action should succeed");
+    }
+
+    expect(provider.generateSelectionReason).toHaveBeenCalledTimes(2);
+    expect(result.data.recommendationSlots[1]).toMatchObject({
+      strategy: "safety",
+      status: "unavailable",
+      isOfficialRecommendation: false,
+      selectionReason: expect.objectContaining({
+        sourceLabel: "模板生成",
+        text: expect.stringContaining("没有可展示的参考方案"),
+      }),
+    });
+  });
+
+  it("does not let selection reasons change recommendation slot ordering or metrics", async () => {
+    const economy = createRecommendationSlot("economy");
+    const safety = createRecommendationSlot("safety");
+    const balanced = createRecommendationSlot("balanced");
+
+    const result = await generateMatchingScheme(createValidInput(), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
+      selectMatchingRecommendationsFn: () => ({
+        slots: [economy, safety, balanced],
+        rejectedSummary: [],
+        rejectedCandidates: [],
+        globalMessages: [],
+      }),
+      aiReasoningProvider: {
+        async generateSelectionReason({ facts }) {
+          return {
+            text: `该${facts.strategyLabel}方案成本较低，强度满足要求，可生产。`,
+          };
+        },
+      },
+      aiReasoningRepository: createInMemoryAiReasoningRepository(),
+      now: new Date("2026-07-04T00:00:00.000Z"),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      throw new Error("matching action should succeed");
+    }
+
+    expect(result.data.recommendationSlots.map((slot) => slot.strategy)).toEqual([
+      "economy",
+      "safety",
+      "balanced",
+    ]);
+    expect(result.data.recommendationSlots[0]!.evaluation?.cost?.taxIncludedCostYuan).toBe(
+      economy.evaluation?.cost?.taxIncludedCostYuan,
+    );
+    expect(result.data.recommendationSlots[1]!.evaluation?.strength?.bctN).toBe(
+      safety.evaluation?.strength?.bctN,
+    );
+    expect(result.data.recommendationSlots[2]!.status).toBe(balanced.status);
   });
 
   it("returns recommendation messages when no candidate is eligible", async () => {
@@ -671,130 +1588,11 @@ describe("generate matching scheme action", () => {
     expect(result.data.recommendationMessages).toContain(
       "当前没有达标可生产方案，以下仅供调整参考",
     );
-    expect(result.data.recommendationSlots).toHaveLength(3);
+    expect(result.data.recommendationSlots).toHaveLength(2);
     expect(result.data.recommendationSlots.some((slot) => slot.status === "reference")).toBe(true);
     expect(result.data.recommendationSlots.every((slot) => !slot.isOfficialRecommendation)).toBe(
       true,
     );
-  });
-
-  it("automatically reads available historical habits and evaluates merged historical candidates", async () => {
-    const defaultCandidate = createCandidate("default");
-    const historicalCandidate = createCandidate("historical");
-    const historicalSummary = createHistoricalSummary();
-    const getHistoricalHabitContextFn = vi.fn().mockResolvedValue(
-      createHistoricalHabitContext({
-        status: "available",
-        summaries: [historicalSummary],
-      }),
-    );
-    const createHistoricalHabitCandidatesFn = vi.fn().mockReturnValue({
-      candidates: [historicalCandidate, defaultCandidate],
-      historicalCandidates: [historicalCandidate],
-      unavailableRecords: [],
-      evidenceByCandidateFingerprint: {
-        [createMatchingCandidateFingerprint(historicalCandidate)]: [
-          { summary: historicalSummary, notices: [] },
-        ],
-      },
-      messages: [],
-      notices: [],
-    });
-    const evaluateMatchingCandidatesFn = vi.fn(({ candidates }) => ({
-      eligibleCandidates: candidates.map((candidate: MatchingCandidate, index: number) =>
-        createEligibleEvaluation({
-          candidate,
-          costYuan: index === 0 ? 2.3 : 2.1,
-          bctN: 640,
-        }),
-      ),
-      rejectedCandidates: [],
-      rejectedSummary: [],
-    }));
-
-    const result = await generateMatchingScheme(createValidInput(), {
-      env: validEnv,
-      cookieStore: createAuthenticatedCookieStore(),
-      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
-      paperMaterialRepository: new InMemoryPaperMaterialRepository([
-        createRecommendablePaperMaterial("liner", { paperKind: "linerboard" }),
-        createRecommendablePaperMaterial("corrugating", {
-          paperKind: "corrugating",
-          applicableFlutes: ["B"],
-        }),
-      ]),
-      createCandidates: () => [defaultCandidate],
-      getHistoricalHabitContextFn,
-      createHistoricalHabitCandidatesFn,
-      evaluateMatchingCandidatesFn,
-      now: new Date("2026-07-01T00:00:00.000Z"),
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      throw new Error("matching action should succeed");
-    }
-
-    expect(result.data.historicalHabitStatus).toBe("available");
-    expect(getHistoricalHabitContextFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        boxSpec: expect.objectContaining({ productType: "食品" }),
-      }),
-    );
-    expect(createHistoricalHabitCandidatesFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        historicalHabitContext: expect.objectContaining({ status: "available" }),
-        defaultCandidates: [defaultCandidate],
-      }),
-    );
-    expect(evaluateMatchingCandidatesFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        candidates: [historicalCandidate, defaultCandidate],
-      }),
-    );
-    expect(result.data.recommendationSlots[0].evaluation?.candidate.id).toBe("historical");
-    expect(result.data.recommendationSlots[0].historicalHabit?.label).toBe("高匹配");
-  });
-
-  it("returns insufficient historical habit status while keeping three recommendation slots", async () => {
-    const defaultCandidate = createCandidate("default");
-    const getHistoricalHabitContextFn = vi.fn().mockResolvedValue(
-      createHistoricalHabitContext({
-        status: "insufficient",
-        similarOrderCount: 4,
-        summaries: [],
-        messages: ["暂无足够历史参考"],
-      }),
-    );
-
-    const result = await generateMatchingScheme(createValidInput(), {
-      env: validEnv,
-      cookieStore: createAuthenticatedCookieStore(),
-      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
-      paperMaterialRepository: new InMemoryPaperMaterialRepository(),
-      createCandidates: () => [defaultCandidate],
-      getHistoricalHabitContextFn,
-      evaluateMatchingCandidatesFn: vi.fn().mockReturnValue({
-        eligibleCandidates: [
-          createEligibleEvaluation({
-            candidate: defaultCandidate,
-            costYuan: 2.1,
-            bctN: 640,
-          }),
-        ],
-        rejectedCandidates: [],
-        rejectedSummary: [],
-      }),
-      now: new Date("2026-07-01T00:00:00.000Z"),
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) {
-      throw new Error("matching action should succeed");
-    }
-
-    expect(result.data.historicalHabitStatus).toBe("insufficient");
-    expect(result.data.recommendationSlots).toHaveLength(3);
   });
 
   it("does not read papers or evaluate candidates when readiness checks fail", async () => {
@@ -825,7 +1623,6 @@ describe("generate matching scheme action", () => {
     const paperMaterialRepository = new InMemoryPaperMaterialRepository();
     const evaluateMatchingCandidatesFn = vi.fn();
     const selectMatchingRecommendationsFn = vi.fn();
-    const getHistoricalHabitContextFn = vi.fn();
 
     const result = await generateMatchingScheme(createValidInput({ lengthMm: "" }), {
       env: validEnv,
@@ -834,7 +1631,6 @@ describe("generate matching scheme action", () => {
       paperMaterialRepository,
       evaluateMatchingCandidatesFn,
       selectMatchingRecommendationsFn,
-      getHistoricalHabitContextFn,
       now: new Date("2026-07-01T00:00:00.000Z"),
     });
 
@@ -847,7 +1643,7 @@ describe("generate matching scheme action", () => {
           fieldErrors: [
             {
               field: "lengthMm",
-              message: "纸箱长度不能为空",
+              message: "纸箱内长不能为空",
             },
           ],
         },
@@ -857,19 +1653,15 @@ describe("generate matching scheme action", () => {
     expect(paperMaterialRepository.callCount).toBe(0);
     expect(evaluateMatchingCandidatesFn).not.toHaveBeenCalled();
     expect(selectMatchingRecommendationsFn).not.toHaveBeenCalled();
-    expect(getHistoricalHabitContextFn).not.toHaveBeenCalled();
   });
 
   it("returns a field error when length is smaller than width", async () => {
-    const result = await generateMatchingScheme(
-      createValidInput({ lengthMm: 300, widthMm: 500 }),
-      {
-        env: validEnv,
-        cookieStore: createAuthenticatedCookieStore(),
-        readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
-        now: new Date("2026-07-01T00:00:00.000Z"),
-      },
-    );
+    const result = await generateMatchingScheme(createValidInput({ lengthMm: 300, widthMm: 500 }), {
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      readinessRepository: new InMemoryMatchingReadinessRepository(createReadiness()),
+      now: new Date("2026-07-01T00:00:00.000Z"),
+    });
 
     expect(result.ok).toBe(false);
     if (result.ok) {
@@ -884,7 +1676,7 @@ describe("generate matching scheme action", () => {
       expect.arrayContaining([
         {
           field: "lengthMm",
-          message: "纸箱长度必须大于或等于宽度",
+          message: "纸箱内长必须大于或等于内宽",
         },
       ]),
     );
@@ -935,6 +1727,13 @@ describe("generate matching scheme action", () => {
               message: MATCHING_BASE_DATA_ERROR_MESSAGE,
             },
           ],
+          missingItems: [
+            {
+              scope: "formula_parameter",
+              field: "formulaParameters",
+              message: "缺少基础参数资料",
+            },
+          ],
         },
       },
     });
@@ -966,205 +1765,56 @@ describe("generate matching scheme action", () => {
   });
 });
 
-describe("recalculate adjusted matching scheme action", () => {
-  it("recalculates an adjusted scheme with current paper data and returns qualified status", async () => {
-    const evaluateCandidateFn = vi.fn((input) =>
-      createEligibleEvaluation({
-        candidate: input.candidate,
-        costYuan: 2.45,
-        bctN: 900,
-      }),
-    );
-
-    const result = await recalculateAdjustedScheme(
-      {
-        boxSpec: createValidInput(),
-        selectedStrategy: "economy",
-        baseCandidate: createCandidate("economy"),
-        adjustments: {
-          layers: [
-            { role: "outer_liner", paperMaterialId: "paper-b" },
-            { role: "corrugating", flute: "B", paperMaterialId: "paper-c" },
-            { role: "inner_liner", paperMaterialId: "paper-d" },
-          ],
-        },
-      },
-      {
-        env: validEnv,
-        cookieStore: createAuthenticatedCookieStore(),
-        paperMaterialRepository: new InMemoryPaperMaterialRepository([
-          createRecommendablePaperMaterial("paper-b", {
-            paperCode: "B",
-            gramWeightGsm: 250,
-            priceYuanPerTon: 4100,
-            burstIndex: 14,
-            ringCrushIndex: 28,
-          }),
-          createRecommendablePaperMaterial("paper-c", {
-            paperKind: "corrugating",
-            paperCode: "C",
-          }),
-          createRecommendablePaperMaterial("paper-d", { paperCode: "D" }),
-        ]),
-        evaluateCandidateFn,
-        now: new Date("2026-07-02T00:00:00.000Z"),
-      },
-    );
-
-    expect(result).toMatchObject({
-      ok: true,
-      data: {
-        finalStatus: "qualified",
-        isManuallyAdjusted: true,
-        warningMessages: [],
-        canSave: true,
-        finalEvaluation: {
-          status: "eligible",
-          cost: expect.objectContaining({ taxIncludedCostYuan: 2.45 }),
-          strength: expect.objectContaining({ bctN: 900 }),
-        },
-      },
-    });
-    expect(evaluateCandidateFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        candidate: expect.objectContaining({
-          layers: expect.arrayContaining([
-            expect.objectContaining({
-              role: "outer_liner",
-              paper: expect.objectContaining({
-                id: "paper-b",
-                priceYuanPerTon: 4100,
-                burstIndex: 14,
-              }),
-            }),
-          ]),
-        }),
-      }),
-    );
-  });
-
-  it("maps strength rejected recalculation to unqualified", async () => {
-    const result = await recalculateAdjustedScheme(
-      {
-        boxSpec: createValidInput(),
-        baseCandidate: createCandidate("economy"),
-        adjustments: {
-          layerCount: 5,
-          fluteType: "BC",
-        },
-      },
-      {
-        env: validEnv,
-        cookieStore: createAuthenticatedCookieStore(),
-        paperMaterialRepository: new InMemoryPaperMaterialRepository(),
-        evaluateCandidateFn: ({ candidate }) => createStrengthRejectedEvaluation(candidate),
-        now: new Date("2026-07-02T00:00:00.000Z"),
-      },
-    );
-
-    expect(result).toMatchObject({
-      ok: true,
-      data: {
-        finalStatus: "unqualified",
-        warningMessages: ["最终方案未达标，不建议生产"],
-        canSave: false,
-      },
-    });
-  });
-
-  it("maps device rejected recalculation to not manufacturable", async () => {
-    const result = await recalculateAdjustedScheme(
-      {
-        boxSpec: createValidInput(),
-        baseCandidate: createCandidate("economy"),
-        adjustments: {
-          layerCount: 5,
-          fluteType: "BC",
-        },
-      },
-      {
-        env: validEnv,
-        cookieStore: createAuthenticatedCookieStore(),
-        paperMaterialRepository: new InMemoryPaperMaterialRepository(),
-        evaluateCandidateFn: ({ candidate }) => createDeviceRejectedEvaluation(candidate),
-        now: new Date("2026-07-02T00:00:00.000Z"),
-      },
-    );
-
-    expect(result).toMatchObject({
-      ok: true,
-      data: {
-        finalStatus: "not_manufacturable",
-        warningMessages: ["最终方案不可生产，不建议生产"],
-        canSave: false,
-      },
-    });
-  });
-
-  it("returns DATA_NOT_FOUND when adjusted paper does not exist", async () => {
-    const evaluateCandidateFn = vi.fn();
-
-    const result = await recalculateAdjustedScheme(
-      {
-        boxSpec: createValidInput(),
-        baseCandidate: createCandidate("economy"),
-        adjustments: {
-          layers: [{ role: "outer_liner", paperMaterialId: "missing-paper" }],
-        },
-      },
-      {
-        env: validEnv,
-        cookieStore: createAuthenticatedCookieStore(),
-        paperMaterialRepository: new InMemoryPaperMaterialRepository(),
-        evaluateCandidateFn,
-        now: new Date("2026-07-02T00:00:00.000Z"),
-      },
-    );
-
-    expect(result).toEqual({
-      ok: false,
-      error: {
-        code: "DATA_NOT_FOUND",
-        message: "调整后的原纸不存在或已停用",
-      },
-    });
-    expect(evaluateCandidateFn).not.toHaveBeenCalled();
-  });
-});
-
 describe("save confirmed matching scheme action", () => {
-  it("saves an unadjusted selected final scheme with original three recommendations", async () => {
+  it("saves a selected system recommendation with a valid generation token", async () => {
     const historyRepository = new InMemoryMatchingSchemeHistoryRepository();
     const trustedEvaluation = createEligibleEvaluation({
       candidate: createCandidate("economy"),
       costYuan: 2.13,
       bctN: 520,
     });
+    const selectedSelectionReason = createStoredSelectionReason(
+      "AI 生成",
+      "保存时的经济型 AI 理由",
+    );
+    const createSelectionReasonFn = vi.fn(async () =>
+      createStoredSelectionReason("模板生成", "不应重新生成未调整理由"),
+    );
+    const originalRecommendationSlots = [
+      {
+        ...createRecommendationSlot(
+          "economy",
+          createEligibleEvaluation({
+            candidate: createCandidate("economy"),
+            costYuan: 0.01,
+            bctN: 520,
+          }),
+        ),
+        selectionReason: selectedSelectionReason,
+      },
+      {
+        ...createRecommendationSlot("safety"),
+        selectionReason: createStoredSelectionReason("模板生成", "安全型原始理由"),
+      },
+      {
+        ...createRecommendationSlot("balanced"),
+        selectionReason: createStoredSelectionReason("模板生成", "均衡型原始理由"),
+      },
+    ];
 
     const result = await saveConfirmedMatchingScheme(
       {
         boxSpec: createValidInput(),
-        originalRecommendationSlots: [
-          createRecommendationSlot(
-            "economy",
-            createEligibleEvaluation({
-              candidate: createCandidate("economy"),
-              costYuan: 0.01,
-              bctN: 520,
-            }),
-          ),
-          createRecommendationSlot("safety"),
-          createRecommendationSlot("balanced"),
-        ],
+        originalRecommendationSlots,
         selectedStrategy: "economy",
-        baseCandidate: createCandidate("economy"),
-        clientState: "recalculated",
+        generationToken: createValidGenerationToken(originalRecommendationSlots),
       },
       {
         env: validEnv,
         cookieStore: createAuthenticatedCookieStore(),
         historyRepository,
         evaluateCandidateFn: () => trustedEvaluation,
+        createSelectionReasonFn,
         now: new Date("2026-07-02T00:00:00.000Z"),
       },
     );
@@ -1188,11 +1838,13 @@ describe("save confirmed matching scheme action", () => {
           evaluation: expect.objectContaining({
             cost: expect.objectContaining({ taxIncludedCostYuan: 0.01 }),
           }),
+          selectionReason: selectedSelectionReason,
         }),
       ]),
       finalSchemeSnapshot: expect.objectContaining({
         finalStatus: "qualified",
         cost: expect.objectContaining({ taxIncludedCostYuan: 2.13 }),
+        selectionReason: selectedSelectionReason,
       }),
       priceSnapshot: expect.arrayContaining([
         expect.objectContaining({
@@ -1209,317 +1861,29 @@ describe("save confirmed matching scheme action", () => {
       exportRecords: [],
       confirmedBy: "operator",
     });
+    expect(createSelectionReasonFn).not.toHaveBeenCalled();
   });
-
-  it("saves an adjusted final scheme with current paper data and marks manual adjustment", async () => {
+  it("allows unauthenticated visitors to save confirmed history", async () => {
     const historyRepository = new InMemoryMatchingSchemeHistoryRepository();
-    const baseCandidate = createCandidate("economy");
-    const evaluateCandidateFn = vi.fn((input) =>
-      createEligibleEvaluation({
-        candidate: input.candidate,
-        costYuan: 2.45,
-        bctN: 900,
-      }),
-    );
-
-    const result = await saveConfirmedMatchingScheme(
-      {
-        boxSpec: createValidInput(),
-        originalRecommendationSlots: [
-          createRecommendationSlot("economy"),
-          createRecommendationSlot("safety"),
-          createRecommendationSlot("balanced"),
-        ],
-        selectedStrategy: "economy",
-        baseCandidate,
-        adjustments: {
-          layerCount: 5,
-          fluteType: "BC",
-          layers: [
-            { role: "outer_liner", paperMaterialId: "paper-b" },
-            { role: "corrugating", flute: "B", paperMaterialId: "paper-c" },
-            { role: "inner_liner", paperMaterialId: "paper-d" },
-          ],
-        },
-        clientState: "recalculated",
-      },
-      {
-        env: validEnv,
-        cookieStore: createAuthenticatedCookieStore(),
-        historyRepository,
-        paperMaterialRepository: new InMemoryPaperMaterialRepository([
-          createRecommendablePaperMaterial("paper-b", {
-            paperCode: "B",
-            gramWeightGsm: 250,
-            priceYuanPerTon: 4100,
-            burstIndex: 14,
-            ringCrushIndex: 28,
-          }),
-          createRecommendablePaperMaterial("paper-c", {
-            paperKind: "corrugating",
-            paperCode: "C",
-          }),
-          createRecommendablePaperMaterial("paper-d", { paperCode: "D" }),
-        ]),
-        evaluateCandidateFn,
-        now: new Date("2026-07-02T00:00:00.000Z"),
-      },
-    );
-
-    expect(result).toEqual({
-      ok: true,
-      data: {
-        schemeId: "scheme-1",
-        finalStatus: "qualified",
-        isManuallyAdjusted: true,
-        warningMessages: [],
-        savedAt: "2026-07-02T00:00:00.000Z",
-      },
-    });
-    expect(historyRepository.records).toHaveLength(1);
-    expect(historyRepository.records[0]).toMatchObject({
-      originalRecommendationSlotsSnapshot: expect.arrayContaining([
-        expect.objectContaining({
-          strategy: "economy",
-          evaluation: expect.objectContaining({
-            candidate: expect.objectContaining({
-              layers: expect.arrayContaining([
-                expect.objectContaining({
-                  paper: expect.objectContaining({ id: "economy-outer" }),
-                }),
-              ]),
-            }),
-          }),
-        }),
-      ]),
-      finalSchemeSnapshot: expect.objectContaining({
-        finalStatus: "qualified",
-        candidate: expect.objectContaining({
-          layerCount: 5,
-          fluteType: "BC",
-          layers: expect.arrayContaining([
-            expect.objectContaining({
-              role: "outer_liner",
-              paper: expect.objectContaining({
-                id: "paper-b",
-                priceYuanPerTon: 4100,
-                burstIndex: 14,
-              }),
-            }),
-          ]),
-        }),
-        cost: expect.objectContaining({ taxIncludedCostYuan: 2.45 }),
-        strength: expect.objectContaining({ bctN: 900 }),
-      }),
-      priceSnapshot: expect.arrayContaining([
-        expect.objectContaining({
-          paperMaterialId: "paper-b",
-          paperCode: "B",
-          priceYuanPerTon: 4100,
-        }),
-      ]),
-      isManuallyAdjusted: true,
-    });
-    expect(evaluateCandidateFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        candidate: expect.objectContaining({
-          layerCount: 5,
-          fluteType: "BC",
-        }),
-      }),
-    );
-  });
-
-  it("rejects dirty adjusted save requests and does not write history", async () => {
-    const historyRepository = new InMemoryMatchingSchemeHistoryRepository();
-    const evaluateCandidateFn = vi.fn();
-
-    const result = await saveConfirmedMatchingScheme(
-      {
-        boxSpec: createValidInput(),
-        originalRecommendationSlots: [
-          createRecommendationSlot("economy"),
-          createRecommendationSlot("safety"),
-          createRecommendationSlot("balanced"),
-        ],
-        selectedStrategy: "economy",
-        baseCandidate: createCandidate("economy"),
-        adjustments: {
-          layerCount: 5,
-          fluteType: "BC",
-        },
-        clientState: "dirty",
-      },
-      {
-        env: validEnv,
-        cookieStore: createAuthenticatedCookieStore(),
-        historyRepository,
-        evaluateCandidateFn,
-        now: new Date("2026-07-02T00:00:00.000Z"),
-      },
-    );
-
-    expect(result).toEqual({
-      ok: false,
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "请先重新校核后再保存",
-      },
-    });
-    expect(evaluateCandidateFn).not.toHaveBeenCalled();
-    expect(historyRepository.records).toHaveLength(0);
-  });
-
-  it("uses server recalculation instead of stale adjusted client metrics when saving", async () => {
-    const historyRepository = new InMemoryMatchingSchemeHistoryRepository();
-
-    const result = await saveConfirmedMatchingScheme(
-      {
-        boxSpec: createValidInput(),
-        originalRecommendationSlots: [
-          createRecommendationSlot("economy"),
-          createRecommendationSlot("safety"),
-          createRecommendationSlot("balanced"),
-        ],
-        selectedStrategy: "economy",
-        baseCandidate: createCandidate("economy"),
-        adjustments: {
-          layerCount: 5,
-          fluteType: "BC",
-        },
-        clientState: "recalculated",
-      },
-      {
-        env: validEnv,
-        cookieStore: createAuthenticatedCookieStore(),
-        historyRepository,
-        paperMaterialRepository: new InMemoryPaperMaterialRepository(),
-        evaluateCandidateFn: ({ candidate }) =>
-          createEligibleEvaluation({ candidate, costYuan: 9.99, bctN: 1200 }),
-        now: new Date("2026-07-02T00:00:00.000Z"),
-      },
-    );
-
-    expect(result).toMatchObject({
-      ok: true,
-      data: {
-        finalStatus: "qualified",
-        isManuallyAdjusted: true,
-      },
-    });
-    expect(historyRepository.records[0]?.finalSchemeSnapshot).toMatchObject({
-      cost: expect.objectContaining({ taxIncludedCostYuan: 9.99 }),
-      strength: expect.objectContaining({ bctN: 1200 }),
-      candidate: expect.objectContaining({
-        layerCount: 5,
-        fluteType: "BC",
-      }),
-    });
-  });
-
-  it.each([
-    {
-      label: "strength rejected",
-      createEvaluation: createStrengthRejectedEvaluation,
-    },
-    {
-      label: "device rejected",
-      createEvaluation: createDeviceRejectedEvaluation,
-    },
-    {
-      label: "data missing",
-      createEvaluation: createDataMissingEvaluation,
-    },
-  ] as const)(
-    "rejects $label adjusted schemes and does not write history",
-    async ({ createEvaluation }) => {
-      const historyRepository = new InMemoryMatchingSchemeHistoryRepository();
-
-      const result = await saveConfirmedMatchingScheme(
-        {
-          boxSpec: createValidInput(),
-          originalRecommendationSlots: [
-            createRecommendationSlot("economy"),
-            createRecommendationSlot("safety"),
-            createRecommendationSlot("balanced"),
-          ],
-          selectedStrategy: "economy",
-          baseCandidate: createCandidate("economy"),
-          adjustments: {
-            layerCount: 5,
-            fluteType: "BC",
-          },
-          clientState: "recalculated",
-        },
-        {
-          env: validEnv,
-          cookieStore: createAuthenticatedCookieStore(),
-          historyRepository,
-          paperMaterialRepository: new InMemoryPaperMaterialRepository(),
-          evaluateCandidateFn: ({ candidate }) => createEvaluation(candidate),
-          now: new Date("2026-07-02T00:00:00.000Z"),
-        },
-      );
-
-      expect(result).toEqual({
-        ok: false,
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "当前方案未达标或不可生产，无法确认保存",
-        },
-      });
-      expect(historyRepository.records).toHaveLength(0);
-    },
-  );
-
-  it("rejects incomplete original recommendations and does not write history", async () => {
-    const historyRepository = new InMemoryMatchingSchemeHistoryRepository();
-
-    const result = await saveConfirmedMatchingScheme(
-      {
-        boxSpec: createValidInput(),
-        originalRecommendationSlots: [createRecommendationSlot("economy"), createRecommendationSlot("safety")],
-        selectedStrategy: "economy",
-        baseCandidate: createCandidate("economy"),
-        clientState: "recalculated",
-      },
-      {
-        env: validEnv,
-        cookieStore: createAuthenticatedCookieStore(),
-        historyRepository,
-        evaluateCandidateFn: () =>
-          createEligibleEvaluation({ candidate: createCandidate("economy"), costYuan: 2.13, bctN: 520 }),
-        now: new Date("2026-07-02T00:00:00.000Z"),
-      },
-    );
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: {
-        code: "VALIDATION_ERROR",
-        message: "原始推荐结果不完整，请重新生成方案",
-      },
-    });
-    expect(historyRepository.records).toHaveLength(0);
-  });
-
-  it("requires authentication before saving history", async () => {
-    const historyRepository = new InMemoryMatchingSchemeHistoryRepository();
+    const originalRecommendationSlots = [
+      createRecommendationSlot("economy"),
+      createRecommendationSlot("safety"),
+      createRecommendationSlot("balanced"),
+    ];
     const evaluateCandidateFn = vi.fn(() =>
-      createEligibleEvaluation({ candidate: createCandidate("economy"), costYuan: 2.13, bctN: 520 }),
+      createEligibleEvaluation({
+        candidate: createCandidate("economy"),
+        costYuan: 2.13,
+        bctN: 520,
+      }),
     );
 
     const result = await saveConfirmedMatchingScheme(
       {
         boxSpec: createValidInput(),
-        originalRecommendationSlots: [
-          createRecommendationSlot("economy"),
-          createRecommendationSlot("safety"),
-          createRecommendationSlot("balanced"),
-        ],
+        originalRecommendationSlots,
         selectedStrategy: "economy",
-        baseCandidate: createCandidate("economy"),
-        clientState: "recalculated",
+        generationToken: createValidGenerationToken(originalRecommendationSlots),
       },
       {
         env: validEnv,
@@ -1530,14 +1894,8 @@ describe("save confirmed matching scheme action", () => {
       },
     );
 
-    expect(result).toEqual({
-      ok: false,
-      error: {
-        code: "AUTH_REQUIRED",
-        message: "需要先登录",
-      },
-    });
-    expect(evaluateCandidateFn).not.toHaveBeenCalled();
-    expect(historyRepository.records).toHaveLength(0);
+    expect(result.ok).toBe(true);
+    expect(evaluateCandidateFn).toHaveBeenCalled();
+    expect(historyRepository.records).toHaveLength(1);
   });
 });

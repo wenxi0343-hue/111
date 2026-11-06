@@ -11,6 +11,7 @@ import type {
   StrengthResult,
 } from "@/modules/calculations/types";
 import type { RecommendationSlot } from "@/modules/recommendation/types";
+import type { SelectionReason } from "@/modules/ai-reasoning/types";
 import { createHistorySnapshot } from "@/modules/scheme-adjustment/create-history-snapshot";
 
 function createBoxSpec(): NormalizedBoxSpec {
@@ -23,6 +24,10 @@ function createBoxSpec(): NormalizedBoxSpec {
     productType: "食品",
     productWeightKg: 10,
     arrangement: "single_row",
+    specialRequirements: {
+      dieCutting: false,
+      punctureStrengthRequired: false,
+    },
     productionQuantity: 1000,
     stackingRequirement: {
       status: "not_required",
@@ -145,18 +150,38 @@ function createSlot(strategy: RecommendationSlot["strategy"], costYuan = 2.13): 
   };
 }
 
+function createSelectionReason(sourceLabel: SelectionReason["sourceLabel"], text: string): SelectionReason {
+  return {
+    source: sourceLabel === "AI 生成" ? "ai" : "template",
+    sourceLabel,
+    text,
+    generatedAt: "2026-07-02T00:00:00.000Z",
+  };
+}
+
 describe("createHistorySnapshot", () => {
   it("keeps input, production quantity, original recommendations and final scheme", () => {
     const finalEvaluation = createEligibleEvaluation(createCandidate(), 2.13);
+    const finalSelectionReason = createSelectionReason("AI 生成", "保存时的最终理由");
     const result = createHistorySnapshot({
       boxSpec: createBoxSpec(),
       originalRecommendationSlots: [
-        createSlot("economy", 0.01),
-        createSlot("safety", 2.5),
-        createSlot("balanced", 2.3),
+        {
+          ...createSlot("economy", 0.01),
+          selectionReason: createSelectionReason("AI 生成", "经济型保存理由"),
+        },
+        {
+          ...createSlot("safety", 2.5),
+          selectionReason: createSelectionReason("模板生成", "安全型保存理由"),
+        },
+        {
+          ...createSlot("balanced", 2.3),
+          selectionReason: createSelectionReason("模板生成", "均衡型保存理由"),
+        },
       ],
       selectedStrategy: "economy",
       finalEvaluation,
+      selectionReason: finalSelectionReason,
       parameters: DEFAULT_CALCULATION_PARAMETERS,
       isManuallyAdjusted: false,
       savedAt: new Date("2026-07-02T00:00:00.000Z"),
@@ -173,10 +198,16 @@ describe("createHistorySnapshot", () => {
     expect(result.data.originalRecommendationSlotsSnapshot[0]?.evaluation?.cost?.taxIncludedCostYuan).toBe(
       0.01,
     );
+    expect(result.data.originalRecommendationSlotsSnapshot.map((slot) => slot.selectionReason?.text)).toEqual([
+      "经济型保存理由",
+      "安全型保存理由",
+      "均衡型保存理由",
+    ]);
     expect(result.data.finalSchemeSnapshot).toMatchObject({
       cost: {
         taxIncludedCostYuan: 2.13,
       },
+      selectionReason: finalSelectionReason,
     });
     expect(result.data.finalStatus).toBe("qualified");
     expect(result.data.isManuallyAdjusted).toBe(false);
@@ -196,6 +227,7 @@ describe("createHistorySnapshot", () => {
       ],
       selectedStrategy: "economy",
       finalEvaluation: createEligibleEvaluation(),
+      selectionReason: createSelectionReason("模板生成", "最终理由"),
       parameters: DEFAULT_CALCULATION_PARAMETERS,
       isManuallyAdjusted: false,
       savedAt: new Date("2026-07-02T00:00:00.000Z"),
@@ -233,12 +265,13 @@ describe("createHistorySnapshot", () => {
     ]);
   });
 
-  it("rejects incomplete original recommendation slots", () => {
+  it("rejects an empty original recommendation result", () => {
     const result = createHistorySnapshot({
       boxSpec: createBoxSpec(),
-      originalRecommendationSlots: [createSlot("economy"), createSlot("safety")],
+      originalRecommendationSlots: [],
       selectedStrategy: "economy",
       finalEvaluation: createEligibleEvaluation(),
+      selectionReason: createSelectionReason("模板生成", "最终理由"),
       parameters: DEFAULT_CALCULATION_PARAMETERS,
       isManuallyAdjusted: false,
       savedAt: new Date("2026-07-02T00:00:00.000Z"),

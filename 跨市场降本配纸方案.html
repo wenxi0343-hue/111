@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>跨市场"同物理指标"降本配纸方案</title>
+<style>
+  body{font-family:-apple-system,"Microsoft YaHei",sans-serif;margin:0;background:#f5f6f8;color:#1f2329;}
+  .wrap{max-width:1120px;margin:0 auto;padding:26px;}
+  h1{font-size:23px;margin:0 0 6px;color:#0b57d0;}
+  .sub{color:#5a6572;font-size:13px;margin-bottom:18px;}
+  h2{font-size:17px;margin:26px 0 10px;border-left:4px solid #0b57d0;padding-left:10px;}
+  table{width:100%;border-collapse:collapse;background:#fff;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-radius:8px;overflow:hidden;margin:8px 0 14px;}
+  th,td{border:1px solid #e6e8eb;padding:9px 11px;vertical-align:top;}
+  th{background:#eef3fb;color:#243;font-weight:600;text-align:left;}
+  tr:nth-child(even) td{background:#fafbfc;}
+  .price{font-weight:700;color:#0b57d0;}
+  .save{font-weight:700;color:#1a7f37;}
+  .warn{color:#c5221f;font-weight:600;}
+  .note{background:#fff8e1;border-left:4px solid #f9ab00;padding:11px 14px;border-radius:6px;font-size:13px;margin:12px 0;color:#5a4a00;}
+  .key{background:#e6f4ea;border-left:4px solid #1a7f37;padding:11px 14px;border-radius:6px;font-size:13.5px;margin:12px 0;}
+  .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;}
+  .t1{background:#e6f4ea;color:#1a7f37;}
+  .t2{background:#fce8e6;color:#c5221f;}
+  .src{color:#5a6572;font-size:11.5px;}
+  ul{margin:6px 0 6px 18px;font-size:13px;} li{margin:3px 0;}
+  .big{font-size:15px;font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>跨市场"同物理指标"降本配纸方案</h1>
+<div class="sub">规格：面纸 200g + B楞瓦纸 120g + 里纸 200g（三层单瓦 B楞）<br>对标口径取自项目代码 <code>paper-strength-standards.ts</code> ｜ 内部基线：数据/纸价(1).xlsx 26-5（2026-05）｜ 市场价：2026-10 全网检索</div>
+
+<div class="note">
+⚠️ <b>重要前提</b>：内部纸价表（26-5）停留在 <b>2026-05</b>，而 2026 下半年纸价处于拉涨通道（多家纸厂 9–10 月上调 50–80 元/吨）。因此<b>"市场价"普遍高于内部旧价</b>，不能简单说"市场更便宜"。真正的降本空间来自<b>等级套利</b>：内部库 200g 面里纸几乎都挂贵价<b>牛卡（俄卡 4660、白面牛卡 5100+）</b>，而很多箱子根本不需要"优等品牛卡"的物理指标——换成同物理等级的<b>箱板/再生牛卡</b>即可省下大笔成本。建议先刷新内部基准价再做精确比对。
+</div>
+
+<h2>一、"同样物理指标"的权威定义（来自项目，与品牌无关）</h2>
+<table>
+<tr><th>纸种</th><th>质量等级</th><th>克重</th><th>耐破指数 (kPa·m²/g)</th><th>横向环压指数 (N·m/g)</th><th>典型纸类</th></tr>
+<tr><td rowspan="3">面里纸<br>(linerboard)</td><td>优等品</td><td rowspan="3">200g</td><td class="price">3.80</td><td class="price">14.5</td><td>牛卡（玖龙/海龙/地龙/俄卡/金太阳）</td></tr>
+<tr><td>一等品</td><td class="price">3.35</td><td class="price">12.5</td><td>优质箱板（N级/F级）、再生牛卡</td></tr>
+<tr><td>合格品</td><td class="price">2.25</td><td class="price">10.5</td><td>普通箱板（T级/Q级/B级再生）</td></tr>
+<tr><td rowspan="3">B楞瓦纸<br>(corrugating)</td><td>优等品</td><td rowspan="3">120g</td><td class="price">0.80</td><td class="price">8.6</td><td>高强瓦楞（AAA级）</td></tr>
+<tr><td>一等品</td><td class="price">0.65</td><td class="price">8.4</td><td>高强瓦楞（A/AA级）</td></tr>
+<tr><td>合格品</td><td class="price">0.40</td><td class="price">7.7</td><td>普通瓦楞（C级普瓦）</td></tr>
+</table>
+<p style="font-size:12.5px;color:#5a6572">说明：只要纸种+等级+克重相同，耐破/环压指数就固定（见 <code>paper-strength-standards.ts</code> 的区间表）。换更便宜的<b>同等级</b>品牌 = 100% 物理等效替代；<b>降等级</b>则属于"改变物理指标"，需确认箱子强度允许。</p>
+
+<h2>二、各物理等级"市场最低价" vs 内部库基线（元/吨，出厂/到厂含税）</h2>
+<table>
+<tr><th>层位</th><th>物理等级</th><th>内部库基线(26-5,2026-05)</th><th>全市场最低等效价(2026-10)</th><th>最便宜市场纸</th><th>同等级节省</th></tr>
+<tr>
+<td rowspan="3">200g<br>面里纸</td>
+<td>优等品</td>
+<td>俄卡 4660；白面牛卡 5100–5200</td>
+<td class="price">≈ 3880</td>
+<td>玖龙 地龙牛卡（西南/华东）</td>
+<td class="save">−780 ~ −1220</td>
+</tr>
+<tr>
+<td>一等品</td>
+<td>N级箱板 3640</td>
+<td class="price">≈ 3540</td>
+<td>景兴 F级牛卡 / 理文 N级</td>
+<td class="save">−100</td>
+</tr>
+<tr>
+<td>合格品</td>
+<td>B级箱板 2990</td>
+<td class="price">≈ 3230–3480</td>
+<td>理文 T级箱板（江苏低/广东高）</td>
+<td class="warn">+240（市场已涨）</td>
+</tr>
+<tr>
+<td rowspan="3">120g<br>B瓦</td>
+<td>优等品</td>
+<td>—（内部无低档优等高瓦）</td>
+<td class="price">≈ 3100–3200</td>
+<td>AAA级高强瓦楞</td>
+<td>—</td>
+</tr>
+<tr>
+<td>一等品</td>
+<td>120高瓦 2880；高瓦纸(120-240) 3750</td>
+<td class="price">≈ 2850–2900</td>
+<td>卓创主流 A级高强瓦楞</td>
+<td class="save">−900（对3750档）</td>
+</tr>
+<tr>
+<td>合格品</td>
+<td>—</td>
+<td class="price">≈ 2400–2600</td>
+<td>C级普通瓦楞</td>
+<td>—</td>
+</tr>
+</table>
+<p class="src">数据来源：内部=纸价(1).xlsx 26-5；市场=纸业网/卓创/隆众/我的钢铁 2026-09~10 公开报价 + 节后 +50 推算。市场低价为各等级可信最低成交参考，非全厂精确表。</p>
+
+<div class="key">
+💡 <b>降本核心结论</b>：内部库 200g 面里纸被"贵价牛卡"主导（俄卡 4660、白面牛卡 5100+，均为<b>优等品</b>物理）。对一个 4.2 英寸桌面小设备纸箱（轻、小、堆码压力低），通常只需要<b>合格品甚至一等品</b>物理即可达标。在同物理等级内换成便宜纸类，单 200g 面里纸即可省 <b>800–1900 元/吨</b>，面+里两层叠加翻倍。
+</div>
+
+<h2>三、推荐：最低成本"达标"方案（同物理指标，不降等级）</h2>
+<table>
+<tr><th>层位</th><th>规格</th><th>选用（物理等效最低价）</th><th>物理等级</th><th>单价 元/吨</th><th>单㎡成本 元/㎡</th></tr>
+<tr><td>面纸</td><td>200g</td><td>理文 T级箱板（江苏）</td><td>合格品</td><td class="price">3230</td><td>0.646</td></tr>
+<tr><td>B瓦纸</td><td>120g</td><td>A级高强瓦楞（市场主流）</td><td>一等品</td><td class="price">2850</td><td>0.454 <span class="src">(×1.33)</span></td></tr>
+<tr><td>里纸</td><td>200g</td><td>理文 T级箱板（江苏）</td><td>合格品</td><td class="price">3230</td><td>0.646</td></tr>
+<tr><td colspan="5" style="text-align:right"><b>合计（原纸）</b></td><td class="price">≈ 1.75</td></tr>
+</table>
+
+<h3 style="margin:14px 0 6px;font-size:14px">对比：不同内部基线的节省幅度</h3>
+<table>
+<tr><th>对比基线（内部库典型选择）</th><th>原纸成本 元/㎡</th><th> vs 推荐方案</th><th>节省</th></tr>
+<tr><td>推荐方案（T级200g + A级高瓦120g）</td><td class="price">1.75</td><td>—</td><td>—</td></tr>
+<tr><td>内部"优等牛卡"默认（俄卡4660×2 + 高瓦2880）</td><td>2.32</td><td class="warn">高 33%</td><td class="save">↓ 0.57 元/㎡（约 25%）</td></tr>
+<tr><td>内部"一等"默认（N级3640×2 + 高瓦2880）</td><td>1.92</td><td class="warn">高 10%</td><td class="save">↓ 0.17 元/㎡（约 9%）</td></tr>
+</table>
+<p class="src">成本=克重×吨价/1e6；瓦纸×瓦楞伸长系数 1.33（取自项目 纸价与成本计算表）。未含加工费/运费/税。</p>
+
+<h2>四、落地建议</h2>
+<ul>
+<li><b>1. 先刷新内部基准价</b>：26-5 是 2026-05 旧价，已低于当前市场约 10%。建议新增「26-10」工作表写入本次市场价，否则工具算出的成本会系统性偏低。</li>
+<li><b>2. 把"便宜等效纸"补进原纸库</b>：重点补充 景兴F级200g（一等,≈3540）、理文T级200g（合格,≈3230）、A级高瓦120g（一等,≈2850）——这些在内部库要么缺失、要么挂贵价，补入后工具的"经济型"推荐会自动选中它们。</li>
+<li><b>3. 不要把"合格品"当万能</b>：降等级属于改变物理指标。若客户/运输要求高堆码，面里纸至少保<b>一等品</b>（耐破3.35/环压12.5），此时最低成本组合为 景兴F级200g(3540)×2 + A级高瓦120g(2850) ≈ 1.86 元/㎡。</li>
+<li><b>4. 物理指标以纸厂质保书为准</b>：市场低价纸需索要批次<b>耐破/环压检测报告</b>，确认落在对应等级区间内，再下单。</li>
+</ul>
+
+<div class="note">
+📌 <b>一句话总结</b>：不在市场里找"更便宜的纸"，而在<b>你箱子真正需要的物理等级</b>里找最便宜的纸。你们最大的浪费是 200g 面里纸用了优等牛卡——换成同物理等级的箱板/再生牛卡，面+里两层每吨省 1400+ 元，原纸成本直降约 25%。
+</div>
+</div>
+</body>
+</html>

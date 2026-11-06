@@ -1,0 +1,24 @@
+[Unit]
+Description=Paper matching production application
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=paper-matching
+Group=paper-matching
+WorkingDirectory=/opt/paper-matching/current
+EnvironmentFile=/etc/paper-matching/app.env
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/paper-matching/current/.next /var/lib/paper-matching
+
+[Install]
+WantedBy=multi-user.target

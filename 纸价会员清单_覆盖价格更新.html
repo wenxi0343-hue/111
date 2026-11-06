@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>纸价订阅会员清单 · 覆盖纸厂 / 价格 / 更新速度</title>
+<style>
+  :root{ --bg:#f5f6f8; --card:#ffffff; --ink:#1f2329; --sub:#5b6168; --line:#e6e8eb;
+         --blue:#185fa5; --teal:#0f6e56; --amber:#854f0b; --red:#a32d2d; --green:#3b6d11; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 20px 48px;}
+  h1{font-size:21px;margin:0 0 4px}
+  .meta{color:var(--sub);font-size:13px;margin-bottom:18px}
+  .note{background:#fff7e6;border:1px solid #f3d79a;color:#7a4f06;padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:20px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  th,td{border-bottom:1px solid var(--line);padding:12px 12px;font-size:13px;vertical-align:top;text-align:left}
+  th{background:#eef1f4;font-weight:600;color:#2c333a;font-size:12.5px;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  td.w{font-weight:600;color:#2c333a;white-space:nowrap}
+  .tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:600;margin:2px 3px 0 0}
+  .t-blue{background:#e6f1fb;color:var(--blue)}
+  .t-teal{background:#e1f5ee;color:var(--teal)}
+  .t-amber{background:#faefda;color:var(--amber)}
+  .t-red{background:#fbeaea;color:var(--red)}
+  .t-green{background:#eaf3de;color:var(--green)}
+  .t-gray{background:#eef0f2;color:var(--sub)}
+  .price{font-family:"SFMono-Regular",Consolas,monospace;font-size:12.5px}
+  .sec{margin:26px 0 10px;font-size:15px;font-weight:600;border-left:4px solid var(--blue);padding-left:10px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .box h3{margin:0 0 6px;font-size:14px}
+  .box p{margin:0;font-size:12.5px;color:var(--sub)}
+  .foot{color:var(--sub);font-size:12px;margin-top:20px}
+  ul{margin:6px 0 0;padding-left:18px}
+  li{margin:3px 0;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>纸价订阅会员清单</h1>
+  <div class="meta">覆盖纸厂范围 · 订阅价格 · 更新速度 · 数据特点 ｜ 整理日期 2026-10-08 ｜ 数据来源：各站公开页 + 百度百科 + 行情页抓取</div>
+
+  <div class="note">
+    ⚠️ 关键说明：行情网站<strong>几乎不公开"精确覆盖多少家纸厂"</strong>，通常以「区域均价 + 代表厂 / 分化格局」形式发布。下方"覆盖纸厂"列给出的是<strong>可确认跟踪的代表厂与发布形式</strong>，而非官网承诺的精确数字。另外，<strong>物理指标（耐破/环压等）这些会员基本不提供</strong>，须靠纸厂质保书 / 来料检 / 参数平台另行获取。
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>网站</th>
+        <th>能拿到的纸厂纸价（覆盖）</th>
+        <th>订阅价格（年费档）</th>
+        <th>更新速度</th>
+        <th>数据特点 / 备注</th>
+        <th>物理<br>指标</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="w">卓创资讯<br><span style="color:var(--sub);font-weight:400;font-size:11.5px">sci99.com</span></td>
+        <td>以「全国均价 + 规模厂」发布。代表：玖龙、理文、山鹰、景兴、太阳、晨鸣、APP、博汇等头部约 <b>15–25 家</b>；中小厂以"分化格局"描述，<b>不逐厂列价</b>。给出 AA 级瓦楞 120g、箱板纸日/周/月均价。</td>
+        <td class="price">App 单品种 <b>¥800</b><br>网页单品种 <b>¥3000</b><br>产业链打包 ¥5000<br>全链(不含周月报) ¥6300<br>全链(含) <b>¥12000</b><br>App 内购 ¥798–1998<br><span class="tag t-green">可免费试用</span></td>
+        <td><span class="tag t-blue">日度均价</span><span class="tag t-blue">周/月评</span><span class="tag t-blue">实时快讯</span></td>
+        <td>行业口径权威，均价/趋势最常用；但缺逐厂明细，中小厂价要另问。</td>
+        <td><span class="tag t-red">否</span></td>
+      </tr>
+      <tr>
+        <td class="w">我的钢铁网<br><span style="color:var(--sub);font-weight:400;font-size:11.5px">mysteel.com</span></td>
+        <td>瓦楞/箱板行情多条数据源标注「隆众资讯」——<b>该品类实时报价实际依赖隆众</b>。以「区域价格区间」呈现（华南/华东/山东/华北/河南/川渝/西南/湖北），<b>不逐厂</b>，间接覆盖头部 + 区域厂约 20+。</td>
+        <td class="price">甲级 <b>¥5000</b><br>乙级 <b>¥3000</b><br>专栏 ¥1500<br>App 单品种 ¥418<br>App 全品种 <b>¥1598</b></td>
+        <td><span class="tag t-blue">每日</span>（早间/午评/日评）<span class="tag t-blue">快讯</span><br><span class="tag t-gray">瓦楞箱板时效受隆众源约束</span></td>
+        <td>黑色/建材起家，纸品类非核心，瓦楞箱板多为转载隆众；不单独买纸品类最划算。</td>
+        <td><span class="tag t-red">否</span></td>
+      </tr>
+      <tr>
+        <td class="w">隆众资讯<br><span style="color:var(--sub);font-weight:400;font-size:11.5px">oilchem.net</span></td>
+        <td><b>多个同行平台的数据源</b>。全国主流市场均价 + 区域汇总；逐厂调价可见玖龙(多基地)/理文/山鹰/景兴/金凤凰/强伟/华宇/恒丰/华通/龙源/荣成/仁丰/华川/永安/宝石等约 <b>30–40 家</b>。</td>
+        <td class="price">会员制，<b>无公开价目</b><br>热线 400-658-1688<br>商务询价<br><span class="tag t-amber">数千~万元级</span></td>
+        <td><span class="tag t-blue">日度</span>（日评/早午评）<span class="tag t-blue">周/月评</span><span class="tag t-blue">产销数据 周四16:00</span></td>
+        <td>纸品类底层数据源，覆盖面与时效都好；价格需电话询价，门槛略高。</td>
+        <td><span class="tag t-red">否</span></td>
+      </tr>
+      <tr>
+        <td class="w">纸引未来网<br><span style="color:var(--sub);font-weight:400;font-size:11.5px">51zywl.com</span></td>
+        <td><b>逐厂密集更新最细</b>。瓦楞 380 条/箱板 191 条/牛卡 474 条等行情条；可见玖龙各基地、理文、山鹰、景兴、金凤凰、强伟、华宇、恒丰、华通、龙源、荣成、仁丰、华川、永安、宝石、金田等 <b>30–40+ 家具体纸厂</b>（含中小厂最全）。</td>
+        <td class="price"><b>¥9.9 体验卡起</b><br>180/360 天套餐<br>含行情+广告+系统<br>双十一促销价<br><span class="tag t-green">最便宜</span></td>
+        <td><span class="tag t-teal">每日多次</span>（早间分析 + 各纸种密集行情条）<span class="tag t-teal">日报/周报</span></td>
+        <td>低价、逐厂调价明细最全，适合找"哪厂涨了"；偏 B2B 交易撮合，深度分析弱于卓创/隆众。</td>
+        <td><span class="tag t-red">否</span></td>
+      </tr>
+      <tr>
+        <td class="w">纸业网<br><span style="color:var(--sub);font-weight:400;font-size:11.5px">paper.com.cn</span></td>
+        <td>宏观行情 + 调价快讯 + 数据中心（产量/进出口/消费量统计）。<b>逐厂精细价弱</b>，覆盖以头部 + 区域为主。</td>
+        <td class="price">行情/信息会员付费<br><b>需电话询价</b><br>010-60204993<br>刊物 ¥668–1200/年</td>
+        <td><span class="tag t-gray">周报</span><span class="tag t-gray">快讯</span><span class="tag t-gray">行情分析（频率较低）</span></td>
+        <td>行业门户老牌，资讯/政策/统计好；实时纸价不是强项，价目不透明。</td>
+        <td><span class="tag t-red">否</span></td>
+      </tr>
+      <tr>
+        <td class="w">纸多星<br><span style="color:var(--sub);font-weight:400;font-size:11.5px">zdxing.cn</span></td>
+        <td>参数 + 替代 + 现货行情。覆盖进口及国产部分牌号，逐厂现货报价<b>有限</b>；<b>物理参数库是其特色</b>（查参数/找替代），但覆盖与权威性有限，部分功能"待上线"。</td>
+        <td class="price">平台以免费查参数/行情为主；现货交易撮合，未明说会员费</td>
+        <td><span class="tag t-teal">每日滚动</span>（现货/期货/进口/出口）</td>
+        <td>唯一带"原纸物理参数 + 替代推荐"的平台，但数据来源/权威性待验证，不能替代质保书与来料检。</td>
+        <td><span class="tag t-amber">部分</span></td>
+      </tr>
+      <tr>
+        <td class="w">百川盈孚<br><span style="color:var(--sub);font-weight:400;font-size:11.5px">baiinfo.com</span></td>
+        <td>会员制，造纸品类日/周度数据，覆盖规模厂，形式类似卓创。</td>
+        <td class="price">会员制，<b>商务询价</b><br><span class="tag t-amber">数千~万元级</span></td>
+        <td><span class="tag t-blue">日度</span><span class="tag t-blue">周度</span></td>
+        <td>化工/大宗起家，造纸为分支；与卓创定位重叠，二选一即可。</td>
+        <td><span class="tag t-red">否</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="sec">给你的选型建议（结合你这个 4.2″ 纸箱项目）</div>
+  <div class="grid">
+    <div class="box">
+      <h3>① 只要"主流厂基准价 + 趋势"</h3>
+      <p>选 <b>卓创（先免费试用 → 单品种 ¥800–3000/年）</b> 或 <b>隆众</b>。覆盖你需要的 200g 箱板/牛卡、120g 高瓦头部厂价，足以做配纸工具的成本基准。</p>
+    </div>
+    <div class="box">
+      <h3>② 想看"哪家中小厂又涨了"</h3>
+      <p>选 <b>纸引未来网（¥9.9 起）</b>，逐厂调价明细最全、更新最密，性价比最高，适合跟踪云南东晟这类地方厂动态。</p>
+    </div>
+    <div class="box">
+      <h3>③ 想要"物理参数 + 替代推荐"</h3>
+      <p><b>纸多星</b> 可免费查参数/替代，但仅作补充；<b>权威实测仍靠纸厂质保书 + 你钉钉那份 993 条来料检主表</b>。</p>
+    </div>
+    <div class="box">
+      <h3>④ 不要重复买</h3>
+      <p>我的钢铁网瓦楞箱板数据多源自隆众，<b>别为同一数据源付两份钱</b>；卓创与百川盈孚定位重叠，二选一。</p>
+    </div>
+  </div>
+
+  <div class="sec">对你箱子（面纸 200g + B 瓦 120g）的可用性</div>
+  <ul>
+    <li>所有上述网站都覆盖 <b>瓦楞 120g（高瓦）</b> 与 <b>箱板/牛卡 200g</b>，可拿到市场基准价——即我们之前算"单位有效强度成本最优解"缺的那块价格，会员能补上。</li>
+    <li>但"同物理指标比价"的另一半——<b>实测耐破/环压</b>——这些会员都不给，仍依赖你已有的钉钉来料检主表或纸厂质保书。</li>
+    <li>建议组合：<b>卓创/隆众（拿价） + 钉钉来料检（拿实测）</b>，比单买任何一个会员都更完整地支撑降本决策。</li>
+  </ul>
+
+  <div class="foot">
+    注：订阅价格与覆盖范围为 2026-10-08 公开可查信息，会员档位与促销价随活动变动，下单前以官网/商务报价为准。"覆盖纸厂数"为基于公开行情页可确认跟踪厂的不精确估算，非官网承诺数字。
+  </div>
+</div>
+</body>
+</html>

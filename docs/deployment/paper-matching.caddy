@@ -1,0 +1,21 @@
+# The root Caddyfile must set `default_sni 43.142.98.3` in its global block.
+# IP-address clients may omit SNI; the server is behind Tencent's private-IP NAT.
+https://43.142.98.3 {
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			profile shortlived
+		}
+	}
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+	reverse_proxy 127.0.0.1:3000
+}
+
+http://43.142.98.3 {
+	redir https://43.142.98.3{uri} permanent
+}

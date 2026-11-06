@@ -64,6 +64,7 @@ class InMemoryMatchingSchemeHistoryRepository implements MatchingSchemeHistoryRe
 
     return updatedRecord;
   }
+
 }
 
 class FailingAppendMatchingSchemeHistoryRepository extends InMemoryMatchingSchemeHistoryRepository {
@@ -92,7 +93,7 @@ function createAuthenticatedCookieStore() {
       displayName: "操作员",
     },
     sessionSecret,
-    now: new Date("2026-07-02T00:00:00.000Z"),
+    now: new Date(),
   });
 
   return createCookieStore(session.value);
@@ -182,6 +183,15 @@ function createHistoryRecord(
   };
 }
 
+function createSelectionReason(sourceLabel: "AI 生成" | "模板生成", text: string) {
+  return {
+    source: sourceLabel === "AI 生成" ? "ai" : "template",
+    sourceLabel,
+    text,
+    generatedAt: "2026-07-02T00:00:00.000Z",
+  };
+}
+
 function createRequest(type: string) {
   return new Request(`http://localhost/api/exports/matching-schemes/scheme-1?type=${type}`);
 }
@@ -245,6 +255,43 @@ describe("matching scheme PDF export route", () => {
     expect(repository.records[0]?.exportRecords).toEqual([
       { type: "summary_sheet", exportedAt: "2026-07-02T10:35:00.000Z" },
     ]);
+  });
+
+  it("passes saved selection reason into generated PDF data", async () => {
+    const record = createHistoryRecord();
+    record.finalSchemeSnapshot = {
+      ...record.finalSchemeSnapshot,
+      selectionReason: createSelectionReason("AI 生成", "保存时的理由"),
+    };
+    const repository = new InMemoryMatchingSchemeHistoryRepository([record]);
+    const generatePdfBuffer = vi.fn(async () => Buffer.from("%PDF-with-reason"));
+    const handler = createMatchingSchemePdfRouteHandler({
+      env: validEnv,
+      cookieStore: createAuthenticatedCookieStore(),
+      repository,
+      now: new Date("2026-07-02T10:35:00.000Z"),
+      generatePdfBuffer,
+    });
+
+    const response = await handler.GET(createRequest("summary_sheet"), {
+      params: { schemeId: "scheme-1" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(generatePdfBuffer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recommendationConclusion: expect.stringContaining("保存时的理由"),
+        }),
+      }),
+    );
+    expect(generatePdfBuffer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recommendationConclusion: expect.stringContaining("AI 生成"),
+        }),
+      }),
+    );
   });
 
   it("returns 401 and does not generate PDF when user is not authenticated", async () => {

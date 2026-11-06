@@ -15,34 +15,30 @@ import type {
   StrengthResult,
 } from "@/modules/calculations/types";
 import type { RecommendationSlot } from "@/modules/recommendation/types";
+import type { SelectionReason } from "@/modules/ai-reasoning/types";
 import {
   generateMatchingScheme,
-  recalculateAdjustedScheme,
   saveConfirmedMatchingScheme,
   type GenerateMatchingSchemeResult,
 } from "@/server/actions/matching-actions";
 
 const actionMocks = vi.hoisted(() => ({
   generateMatchingScheme: vi.fn(),
-  recalculateAdjustedScheme: vi.fn(),
   saveConfirmedMatchingScheme: vi.fn(),
 }));
 
 vi.mock("@/server/actions/matching-actions", () => ({
   generateMatchingScheme: actionMocks.generateMatchingScheme,
-  recalculateAdjustedScheme: actionMocks.recalculateAdjustedScheme,
   saveConfirmedMatchingScheme: actionMocks.saveConfirmedMatchingScheme,
 }));
 
 const mockedGenerateMatchingScheme = vi.mocked(generateMatchingScheme);
-const mockedRecalculateAdjustedScheme = vi.mocked(recalculateAdjustedScheme);
 const mockedSaveConfirmedMatchingScheme = vi.mocked(saveConfirmedMatchingScheme);
 
 function fillValidBoxSpecForm() {
-  fireEvent.change(screen.getByLabelText("纸箱长度（mm）"), { target: { value: "500" } });
-  fireEvent.change(screen.getByLabelText("纸箱宽度（mm）"), { target: { value: "300" } });
-  fireEvent.change(screen.getByLabelText("纸箱高度（mm）"), { target: { value: "250" } });
-  fireEvent.change(screen.getByLabelText("产品类型"), { target: { value: "食品" } });
+  fireEvent.change(screen.getByLabelText("纸箱内长（mm）"), { target: { value: "500" } });
+  fireEvent.change(screen.getByLabelText("纸箱内宽（mm）"), { target: { value: "300" } });
+  fireEvent.change(screen.getByLabelText("纸箱内高（mm）"), { target: { value: "250" } });
   fireEvent.change(screen.getByLabelText("内装物重量（kg）"), { target: { value: "10" } });
   fireEvent.change(screen.getByLabelText("生产数量（个）"), { target: { value: "1000" } });
 }
@@ -60,6 +56,10 @@ function createSuccessResult(): { ok: true; data: GenerateMatchingSchemeResult }
         productType: "食品",
         productWeightKg: 10,
         arrangement: "single_row",
+        specialRequirements: {
+          dieCutting: false,
+          punctureStrengthRequired: false,
+        },
         productionQuantity: 1000,
         stackingRequirement: {
           status: "not_required",
@@ -76,42 +76,7 @@ function createSuccessResult(): { ok: true; data: GenerateMatchingSchemeResult }
       recommendationMessages: [],
       rejectedSummary: [],
       rejectedCandidates: [],
-      historicalHabitStatus: "unavailable",
-    },
-  };
-}
-
-function createSuccessResultWithStacking(): { ok: true; data: GenerateMatchingSchemeResult } {
-  return {
-    ok: true,
-    data: {
-      boxSpec: {
-        lengthMm: 500,
-        widthMm: 300,
-        heightMm: 250,
-        structureType: "0201",
-        formingMethod: "glue",
-        productType: "食品",
-        productWeightKg: 10,
-        arrangement: "single_row",
-        productionQuantity: 1000,
-        stackingRequirement: {
-          status: "required",
-          stackingLayers: 5,
-          displayText: "已纳入堆码承重校核",
-        },
-      },
-      stackingIncluded: true,
-      recommendationSlots: [
-        createUnavailableSlot("economy", "经济型"),
-        createUnavailableSlot("safety", "安全型"),
-        createUnavailableSlot("balanced", "均衡型"),
-      ],
-      recommendationMessages: [],
-      rejectedSummary: [],
-      rejectedCandidates: [],
-      stackingDisplayText: "已纳入堆码承重校核",
-      historicalHabitStatus: "unavailable",
+      generationToken: "test-generation-token",
     },
   };
 }
@@ -269,8 +234,28 @@ function createEmptyRecommendationResult(): { ok: true; data: GenerateMatchingSc
       ],
       recommendationMessages: ["当前没有达标可生产方案，以下仅供调整参考"],
       rejectedSummary: [{ type: "STRENGTH_UNQUALIFIED", label: "强度不达标", count: 1 }],
+      rejectedCandidates: [weakEvaluation],
+    },
+  };
+}
+
+function createUnavailableRecommendationResultWithRejectedArea(): {
+  ok: true;
+  data: GenerateMatchingSchemeResult;
+} {
+  return {
+    ok: true,
+    data: {
+      ...createSuccessResult().data,
+      recommendationMessages: ["当前没有达标可生产方案，以下仅供调整参考"],
+      rejectedSummary: [{ type: "STRENGTH_UNQUALIFIED", label: "强度不达标", count: 1 }],
       rejectedCandidates: [
-        weakEvaluation,
+        {
+          status: "rejected",
+          candidate: createCandidate("weak"),
+          reasons: [{ type: "STRENGTH_UNQUALIFIED", code: "ECT_TOO_LOW", message: "边压不足" }],
+          area: createArea(),
+        },
       ],
     },
   };
@@ -309,117 +294,6 @@ function createRepeatedRecommendationResult(): { ok: true; data: GenerateMatchin
   };
 }
 
-function createHistoricalHabitRecommendationResult(): {
-  ok: true;
-  data: GenerateMatchingSchemeResult;
-} {
-  const result = createMatchingResultWithDetails();
-
-  return {
-    ok: true,
-    data: {
-      ...result.data,
-      historicalHabitStatus: "available",
-      recommendationMessages: ["历史常用组合当前不可用，已改为相近达标方案"],
-      recommendationSlots: [
-        {
-          ...result.data.recommendationSlots[0],
-          historicalHabit: {
-            level: "high",
-            label: "高匹配",
-            reasons: [
-              "相似产品中五层 BC 楞出现 18 次，占比 62%",
-              "纸厂和克重组合与历史常用组合一致",
-            ],
-            evidences: [
-              {
-                dimensionType: "product",
-                dimensionKey: "脱敏电子产品",
-                matchedFields: ["layer_count", "flute", "factory", "gram_weight"],
-                layerCount: 5,
-                flute: "BC",
-                orderCount: 18,
-                frequency: 0.62,
-              },
-            ],
-            conflictMessages: ["历史常用组合本次边压不足，已改为推荐达标的相近方案"],
-          },
-        },
-        {
-          ...result.data.recommendationSlots[1],
-          historicalHabit: {
-            level: "medium",
-            label: "中匹配",
-            reasons: ["相似尺寸区间中三层 B 楞仍有历史参考"],
-            evidences: [
-              {
-                dimensionType: "size_bucket",
-                dimensionKey: "小箱",
-                matchedFields: ["layer_count", "flute"],
-                layerCount: 3,
-                flute: "B",
-                orderCount: 8,
-                frequency: 0.4,
-              },
-            ],
-            conflictMessages: [],
-          },
-        },
-        {
-          ...result.data.recommendationSlots[2],
-          historicalHabit: {
-            level: "low",
-            label: "低匹配",
-            reasons: ["当前方案与历史常用组合只匹配部分弱特征"],
-            evidences: [
-              {
-                dimensionType: "weight_bucket",
-                dimensionKey: "≤20kg",
-                matchedFields: ["layer_count"],
-                layerCount: 3,
-                orderCount: 5,
-                frequency: 0.25,
-              },
-            ],
-            conflictMessages: [],
-          },
-        },
-      ],
-    },
-  };
-}
-
-function createInsufficientHistoricalHabitRecommendationResult(): {
-  ok: true;
-  data: GenerateMatchingSchemeResult;
-} {
-  const result = createMatchingResultWithDetails();
-  const createSlotWithInsufficientHistory = (slot: RecommendationSlot): RecommendationSlot => ({
-    ...slot,
-    historicalHabit: {
-      level: "insufficient",
-      label: "暂无足够历史参考",
-      reasons: ["相似历史订单少于 5 条，本次按现有推荐逻辑生成方案"],
-      evidences: [],
-      conflictMessages: [],
-    },
-  });
-
-  return {
-    ok: true,
-    data: {
-      ...result.data,
-      historicalHabitStatus: "insufficient",
-      recommendationMessages: ["暂无足够历史参考，本次按现有推荐逻辑生成方案"],
-      recommendationSlots: [
-        createSlotWithInsufficientHistory(result.data.recommendationSlots[0]),
-        createSlotWithInsufficientHistory(result.data.recommendationSlots[1]),
-        createSlotWithInsufficientHistory(result.data.recommendationSlots[2]),
-      ],
-    },
-  };
-}
-
 function createCandidate(id: string): MatchingCandidate {
   return {
     id,
@@ -431,6 +305,7 @@ function createCandidate(id: string): MatchingCandidate {
         paper: {
           id: `${id}-outer`,
           paperCode: `${id}-P1`,
+          factoryName: "重庆理文",
           gramWeightGsm: 200,
           priceYuanPerTon: 3000,
           burstIndex: 10,
@@ -443,6 +318,7 @@ function createCandidate(id: string): MatchingCandidate {
         paper: {
           id: `${id}-corrugating`,
           paperCode: `${id}-W1`,
+          factoryName: "云南东晟",
           gramWeightGsm: 160,
           priceYuanPerTon: 2800,
           burstIndex: 10,
@@ -454,6 +330,7 @@ function createCandidate(id: string): MatchingCandidate {
         paper: {
           id: `${id}-inner`,
           paperCode: `${id}-P2`,
+          factoryName: "重庆理文",
           gramWeightGsm: 200,
           priceYuanPerTon: 3000,
           burstIndex: 10,
@@ -466,24 +343,24 @@ function createCandidate(id: string): MatchingCandidate {
 
 function createArea(): BoardAreaResult {
   return {
-    innerLengthMm: 492,
-    innerWidthMm: 292,
-    innerHeightMm: 242,
-    boardLengthMm: 1625,
-    boardWidthMm: 548,
-    feedLengthMm: 1625,
-    feedWidthMm: 548,
-    printLengthMm: 1625,
-    printWidthMm: 548,
+    innerLengthMm: 500,
+    innerWidthMm: 300,
+    innerHeightMm: 250,
+    boardLengthMm: 1657,
+    boardWidthMm: 564,
+    feedLengthMm: 1657,
+    feedWidthMm: 564,
+    printLengthMm: 1657,
+    printWidthMm: 564,
     slotIntervalsMm: {
-      firstPanel: 492,
-      firstSlot: 292,
-      secondPanel: 492,
-      secondSlot: 292,
+      firstPanel: 500,
+      firstSlot: 300,
+      secondPanel: 500,
+      secondSlot: 300,
     },
-    areaSquareMeters: 0.8905,
+    areaSquareMeters: 0.9345,
     formingPieces: 1,
-    flapMm: 150,
+    flapMm: 154,
     tongueMm: 35,
   };
 }
@@ -511,6 +388,20 @@ function createCost(): CostResult {
   };
 }
 
+function createSelectionReason(
+  sourceLabel: SelectionReason["sourceLabel"],
+  text: string,
+  fallbackReason?: SelectionReason["fallbackReason"],
+): SelectionReason {
+  return {
+    source: sourceLabel === "AI 生成" ? "ai" : "template",
+    sourceLabel,
+    text,
+    fallbackReason,
+    generatedAt: "2026-07-04T00:00:00.000Z",
+  };
+}
+
 function createEligibleEvaluation(candidate: MatchingCandidate): CandidateEvaluation {
   return {
     status: "eligible",
@@ -521,98 +412,6 @@ function createEligibleEvaluation(candidate: MatchingCandidate): CandidateEvalua
       reasons: [],
     },
     strength: createStrength(),
-    cost: createCost(),
-  };
-}
-
-function createRecalculatedEvaluation(overrides: {
-  candidate?: MatchingCandidate | undefined;
-  bctN?: number | undefined;
-  costYuan?: number | undefined;
-} = {}): CandidateEvaluation {
-  return {
-    status: "eligible",
-    candidate: overrides.candidate ?? {
-      ...createCandidate("adjusted"),
-      layerCount: 5,
-      fluteType: "BC",
-    },
-    area: createArea(),
-    device: {
-      isManufacturable: true,
-      reasons: [],
-    },
-    strength: {
-      ...createStrength(),
-      bctN: overrides.bctN ?? 900,
-    },
-    cost: {
-      ...createCost(),
-      taxIncludedCostYuan: overrides.costYuan ?? 2.45,
-    },
-  };
-}
-
-function createNotManufacturableEvaluation(): CandidateEvaluation {
-  return {
-    status: "rejected",
-    candidate: {
-      ...createCandidate("adjusted"),
-      layerCount: 5,
-      fluteType: "BC",
-    },
-    reasons: [
-      {
-        type: "NOT_MANUFACTURABLE",
-        code: "BOARD_WIDTH_TOO_LARGE",
-        message: "纸板宽超过设备限制",
-      },
-    ],
-    area: createArea(),
-    device: {
-      isManufacturable: false,
-      reasons: [
-        {
-          type: "NOT_MANUFACTURABLE",
-          code: "BOARD_WIDTH_TOO_LARGE",
-          message: "纸板宽超过设备限制",
-        },
-      ],
-    },
-  };
-}
-
-function createUnqualifiedEvaluation(): CandidateEvaluation {
-  return {
-    status: "rejected",
-    candidate: {
-      ...createCandidate("adjusted"),
-      layerCount: 5,
-      fluteType: "BC",
-    },
-    reasons: [
-      {
-        type: "STRENGTH_UNQUALIFIED",
-        code: "BCT_TOO_LOW",
-        message: "空箱抗压不足",
-      },
-    ],
-    area: createArea(),
-    device: {
-      isManufacturable: true,
-      reasons: [],
-    },
-    strength: {
-      ...createStrength(),
-      isQualified: false,
-      reasons: [
-        {
-          type: "STRENGTH_UNQUALIFIED",
-          code: "BCT_TOO_LOW",
-          message: "空箱抗压不足",
-        },
-      ],
-    },
     cost: createCost(),
   };
 }
@@ -667,16 +466,6 @@ describe("matching page", () => {
       },
     });
     mockedGenerateMatchingScheme.mockResolvedValue(createSuccessResult());
-    mockedRecalculateAdjustedScheme.mockResolvedValue({
-      ok: true,
-      data: {
-        finalEvaluation: createRecalculatedEvaluation(),
-        finalStatus: "qualified",
-        isManuallyAdjusted: true,
-        warningMessages: [],
-        canSave: true,
-      },
-    });
     mockedSaveConfirmedMatchingScheme.mockResolvedValue({
       ok: true,
       data: {
@@ -693,16 +482,19 @@ describe("matching page", () => {
     render(<MatchingPage />);
 
     expect(screen.getByRole("heading", { name: "单次配纸" })).toBeTruthy();
-    expect(screen.getByLabelText("纸箱长度（mm）")).toBeTruthy();
-    expect(screen.getByLabelText("纸箱宽度（mm）")).toBeTruthy();
-    expect(screen.getByLabelText("纸箱高度（mm）")).toBeTruthy();
+    expect(screen.getByLabelText("纸箱内长（mm）")).toBeTruthy();
+    expect(screen.getByLabelText("纸箱内宽（mm）")).toBeTruthy();
+    expect(screen.getByLabelText("纸箱内高（mm）")).toBeTruthy();
     expect(screen.getByLabelText("纸箱结构类型")).toBeTruthy();
     expect(screen.getByLabelText("成箱方式")).toBeTruthy();
-    expect(screen.getByLabelText("产品类型")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "产品类型" })).toBeTruthy();
     expect(screen.getByLabelText("内装物重量（kg）")).toBeTruthy();
     expect(screen.getByLabelText("内装物排列方式")).toBeTruthy();
     expect(screen.getByLabelText("生产数量（个）")).toBeTruthy();
     expect(screen.getByLabelText("堆码层数（层）")).toBeTruthy();
+    expect(screen.getByLabelText("模切工艺")).toBeTruthy();
+    expect(screen.getByLabelText("戳穿强度要求")).toBeTruthy();
+    expect(screen.getByLabelText("其他特殊说明")).toBeTruthy();
     expect(screen.queryByText("堆码总高度")).toBeNull();
     expect(document.querySelector('[name="stackingHeight"]')).toBeNull();
     expect(document.querySelector('[name="stackingTotalHeight"]')).toBeNull();
@@ -724,10 +516,36 @@ describe("matching page", () => {
         productType: "食品",
         productWeightKg: "10",
         arrangement: "single_row",
-        specialRequirements: undefined,
+        specialRequirements: {
+          dieCutting: false,
+          punctureStrengthRequired: false,
+          notes: undefined,
+        },
         productionQuantity: "1000",
         stackingLayers: undefined,
       });
+    });
+  });
+
+  it("submits structured special requirements", async () => {
+    render(<MatchingPage />);
+
+    fillValidBoxSpecForm();
+    fireEvent.click(screen.getByLabelText("模切工艺"));
+    fireEvent.click(screen.getByLabelText("戳穿强度要求"));
+    fireEvent.change(screen.getByLabelText("其他特殊说明"), { target: { value: " 防潮 " } });
+    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
+
+    await waitFor(() => {
+      expect(mockedGenerateMatchingScheme).toHaveBeenCalledWith(
+        expect.objectContaining({
+          specialRequirements: {
+            dieCutting: true,
+            punctureStrengthRequired: true,
+            notes: " 防潮 ",
+          },
+        }),
+      );
     });
   });
 
@@ -739,8 +557,8 @@ describe("matching page", () => {
         message: "请检查纸箱输入",
         details: {
           fieldErrors: [
-            { field: "lengthMm", message: "纸箱长度不能为空" },
-            { field: "widthMm", message: "纸箱宽度允许范围为 100-1500mm" },
+            { field: "lengthMm", message: "纸箱内长不能为空" },
+            { field: "widthMm", message: "纸箱内宽允许范围为 100-1500mm" },
             { field: "stackingLayers", message: "堆码层数允许范围为 1-30 层" },
           ],
         },
@@ -751,8 +569,8 @@ describe("matching page", () => {
     fillValidBoxSpecForm();
     fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
 
-    expect(await screen.findByText("纸箱长度不能为空")).toBeTruthy();
-    expect(screen.getByText("纸箱宽度允许范围为 100-1500mm")).toBeTruthy();
+    expect(await screen.findByText("纸箱内长不能为空")).toBeTruthy();
+    expect(screen.getByText("纸箱内宽允许范围为 100-1500mm")).toBeTruthy();
     expect(screen.getByText("堆码层数允许范围为 1-30 层")).toBeTruthy();
   });
 
@@ -801,37 +619,66 @@ describe("matching page", () => {
     expect(screen.queryByTestId("recommendation-slot-balanced")).toBeNull();
   });
 
-  it("shows stacking not checked text after a successful submit without stacking layers", async () => {
+  it("shows calculated area after a successful submit without stacking layers", async () => {
+    mockedGenerateMatchingScheme.mockResolvedValue(createMatchingResultWithDetails());
     render(<MatchingPage />);
 
     fillValidBoxSpecForm();
     fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
 
-    expect(await screen.findByText(STACKING_NOT_REQUIRED_DISPLAY_TEXT)).toBeTruthy();
+    expect(await screen.findByText("计算面积")).toBeTruthy();
+    expect(screen.getByText("0.9345 m²")).toBeTruthy();
+    expect(screen.queryByText("堆码承重")).toBeNull();
+    expect(screen.queryByText(STACKING_NOT_REQUIRED_DISPLAY_TEXT)).toBeNull();
+  });
+
+  it("shows calculated area when no recommendation slot can be displayed", async () => {
+    mockedGenerateMatchingScheme.mockResolvedValue(
+      createUnavailableRecommendationResultWithRejectedArea(),
+    );
+    render(<MatchingPage />);
+
+    fillValidBoxSpecForm();
+    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
+
+    expect(await screen.findByText("计算面积")).toBeTruthy();
+    expect(screen.getByText("0.9345 m²")).toBeTruthy();
+    expect(screen.queryByText("暂无面积结果")).toBeNull();
   });
 
   it("does not show stacking pass or fail conclusions when stacking layers are empty", async () => {
+    mockedGenerateMatchingScheme.mockResolvedValue(createMatchingResultWithDetails());
     render(<MatchingPage />);
 
     fillValidBoxSpecForm();
     fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
 
-    expect(await screen.findByText(STACKING_NOT_REQUIRED_DISPLAY_TEXT)).toBeTruthy();
+    expect(await screen.findByText("计算面积")).toBeTruthy();
     expect(document.body.textContent ?? "").not.toContain("承重达标");
     expect(document.body.textContent ?? "").not.toContain("承重不达标");
     expect(document.body.textContent ?? "").not.toContain("堆码达标");
     expect(document.body.textContent ?? "").not.toContain("堆码不达标");
   });
 
-  it("shows stacking layers are included after a successful submit with stacking layers", async () => {
-    mockedGenerateMatchingScheme.mockResolvedValue(createSuccessResultWithStacking());
+  it("keeps calculated area visible instead of stacking summary when stacking layers are included", async () => {
+    const result = createMatchingResultWithDetails();
+    result.data.boxSpec.stackingRequirement = {
+      status: "required",
+      stackingLayers: 5,
+      displayText: "已纳入堆码承重校核",
+    };
+    result.data.stackingIncluded = true;
+    result.data.stackingDisplayText = "已纳入堆码承重校核";
+    mockedGenerateMatchingScheme.mockResolvedValue(result);
     render(<MatchingPage />);
 
     fillValidBoxSpecForm();
     fireEvent.change(screen.getByLabelText("堆码层数（层）"), { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
 
-    expect(await screen.findByText("已纳入堆码承重校核（5 层）")).toBeTruthy();
+    expect(await screen.findByText("计算面积")).toBeTruthy();
+    expect(screen.getByText("0.9345 m²")).toBeTruthy();
+    expect(screen.queryByText("已纳入堆码承重校核（5 层）")).toBeNull();
   });
 
   it("shows recommended candidate summaries returned by the server", async () => {
@@ -847,57 +694,135 @@ describe("matching page", () => {
     expect(screen.getByText("均衡型")).toBeTruthy();
     expect(screen.getAllByText("正式推荐")).toHaveLength(3);
     expect(screen.getAllByText("3 层 B 楞").length).toBeGreaterThanOrEqual(3);
-    expect(screen.getAllByText("面积 0.8905 m²").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("空箱抗压 450 N").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("边压 4.50 kN/m").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("耐破 3800").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("含税成本 2.13 元").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("空箱抗压").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("450 N").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("边压").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("4.50 kN/m").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("耐破").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("3800").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("含税成本").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2.13 元").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("面纸：economy-P1 / 200g / 重庆理文").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("B瓦：economy-W1 / 160g / 云南东晟").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("里纸：economy-P2 / 200g / 重庆理文").length).toBeGreaterThan(0);
   });
 
-  it("shows historical habit labels, reasons, and conflict messages on recommendation cards", async () => {
-    mockedGenerateMatchingScheme.mockResolvedValue(createHistoricalHabitRecommendationResult());
+  it("keeps recommendation cards collapsed until the user expands one", async () => {
+    mockedGenerateMatchingScheme.mockResolvedValue(createMatchingResultWithDetails());
     render(<MatchingPage />);
 
     fillValidBoxSpecForm();
     fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
 
-    const economySlot = await screen.findByTestId("recommendation-slot-economy");
+    const economyDetails = await screen.findByTestId("recommendation-details-economy");
+    const safetyDetails = screen.getByTestId("recommendation-details-safety");
+    const balancedDetails = screen.getByTestId("recommendation-details-balanced");
 
-    expect(economySlot.textContent ?? "").toContain("历史参考");
-    expect(economySlot.textContent ?? "").toContain("高匹配");
-    expect(economySlot.textContent ?? "").toContain("相似产品中五层 BC 楞出现 18 次，占比 62%");
-    expect(economySlot.textContent ?? "").toContain("纸厂和克重组合与历史常用组合一致");
-    expect(economySlot.textContent ?? "").toContain("历史常用组合本次边压不足，已改为推荐达标的相近方案");
-    expect(screen.getByText("中匹配")).toBeTruthy();
-    expect(screen.getByText("低匹配")).toBeTruthy();
-    expect(screen.getByText("历史常用组合当前不可用，已改为相近达标方案")).toBeTruthy();
-  });
-
-  it("shows insufficient history without exposing score, historical cost, or customer preference scope", async () => {
-    mockedGenerateMatchingScheme.mockResolvedValue(
-      createInsufficientHistoricalHabitRecommendationResult(),
+    expect(economyDetails).toHaveProperty("open", false);
+    expect(safetyDetails).toHaveProperty("open", false);
+    expect(balancedDetails).toHaveProperty("open", false);
+    expect(screen.getByTestId("recommendation-slot-economy").textContent ?? "").toContain("经济型");
+    expect(screen.getByTestId("recommendation-slot-economy").textContent ?? "").toContain(
+      "3 层 B 楞",
     );
+    expect(screen.getAllByText("含税成本").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("边压").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("空箱抗压").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("耐破").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("recommendation-slot-economy").textContent ?? "").toContain(
+      "面纸：economy-P1 / 200g / 重庆理文",
+    );
+
+    fireEvent.click(economyDetails.querySelector("summary") as HTMLElement);
+
+    expect(economyDetails).toHaveProperty("open", true);
+    expect(economyDetails.textContent ?? "").toContain("选型理由");
+    expect(economyDetails.textContent ?? "").not.toContain("强度要求");
+    expect(economyDetails.textContent ?? "").not.toContain("生产要求");
+    expect(economyDetails.textContent ?? "").not.toContain("原纸组合");
+    expect(economyDetails.textContent ?? "").not.toContain("含税成本");
+    expect(economyDetails.textContent ?? "").not.toContain("边压");
+    expect(economyDetails.textContent ?? "").not.toContain("空箱抗压");
+    expect(economyDetails.textContent ?? "").not.toContain("耐破");
+  });
+
+  it("completes the main matching flow from input to saved output", async () => {
+    const matchingResult = createMatchingResultWithDetails();
+    mockedGenerateMatchingScheme.mockResolvedValue(matchingResult);
     render(<MatchingPage />);
 
     fillValidBoxSpecForm();
     fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
 
-    const economySlot = await screen.findByTestId("recommendation-slot-economy");
-    const pageText = document.body.textContent ?? "";
+    await waitFor(() => {
+      expect(mockedGenerateMatchingScheme).toHaveBeenCalledWith({
+        lengthMm: "500",
+        widthMm: "300",
+        heightMm: "250",
+        structureType: "0201",
+        formingMethod: "glue",
+        productType: "食品",
+        productWeightKg: "10",
+        arrangement: "single_row",
+        specialRequirements: {
+          dieCutting: false,
+          punctureStrengthRequired: false,
+          notes: undefined,
+        },
+        productionQuantity: "1000",
+        stackingLayers: undefined,
+      });
+    });
 
-    expect(economySlot.textContent ?? "").toContain("暂无足够历史参考");
-    expect(economySlot.textContent ?? "").toContain("相似历史订单少于 5 条，本次按现有推荐逻辑生成方案");
-    expect(economySlot.textContent ?? "").not.toContain("高匹配");
-    expect(economySlot.textContent ?? "").not.toContain("中匹配");
-    expect(economySlot.textContent ?? "").not.toContain("低匹配");
-    expect(pageText).not.toContain("historicalHabitScore");
-    expect(pageText).not.toContain("rawScore");
-    expect(pageText).not.toContain("score");
-    expect(pageText).not.toContain("历史价格");
-    expect(pageText).not.toContain("历史成本");
-    expect(pageText).not.toContain("客户偏好");
-    expect(pageText).not.toContain("成本趋势");
-    expect(pageText).not.toContain("批量配纸");
+    const economySlot = await screen.findByTestId("recommendation-slot-economy");
+    const safetySlot = screen.getByTestId("recommendation-slot-safety");
+    const balancedSlot = screen.getByTestId("recommendation-slot-balanced");
+
+    expect(economySlot.textContent ?? "").toContain("经济型");
+    expect(safetySlot.textContent ?? "").toContain("安全型");
+    expect(balancedSlot.textContent ?? "").toContain("均衡型");
+    expect(economySlot.textContent ?? "").toContain("3 层 B 楞");
+    expect(economySlot.textContent ?? "").toContain("含税成本");
+    expect(economySlot.textContent ?? "").toContain("2.13 元");
+    expect(economySlot.textContent ?? "").toContain("空箱抗压");
+    expect(economySlot.textContent ?? "").toContain("450 N");
+    expect(screen.getByText("不推荐原因汇总")).toBeTruthy();
+    expect(mockedSaveConfirmedMatchingScheme).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "选择经济型" }));
+    expect(screen.getByText("当前最终方案：经济型")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "确认保存" }));
+
+    await waitFor(() => {
+      expect(mockedSaveConfirmedMatchingScheme).toHaveBeenCalledWith({
+        boxSpec: {
+          lengthMm: 500,
+          widthMm: 300,
+          heightMm: 250,
+          structureType: "0201",
+          formingMethod: "glue",
+          productType: "食品",
+          productWeightKg: 10,
+          arrangement: "single_row",
+          specialRequirements: {
+            dieCutting: false,
+            punctureStrengthRequired: false,
+          },
+          productionQuantity: 1000,
+        },
+        originalRecommendationSlots: matchingResult.data.recommendationSlots,
+        selectedStrategy: "economy",
+        generationToken: matchingResult.data.generationToken,
+      });
+    });
+
+    const savedPanel = await screen.findByTestId("saved-scheme-summary");
+
+    expect(savedPanel.textContent ?? "").toContain("保存成功");
+    expect(savedPanel.textContent ?? "").toContain("系统推荐方案");
+    expect(savedPanel.textContent ?? "").toContain("scheme-1");
+    expect(savedPanel.textContent ?? "").toContain("2026-07-02T00:00:00.000Z");
   });
 
   it("marks a clicked recommendation as the current final scheme", async () => {
@@ -936,12 +861,15 @@ describe("matching page", () => {
           productType: "食品",
           productWeightKg: 10,
           arrangement: "single_row",
+          specialRequirements: {
+            dieCutting: false,
+            punctureStrengthRequired: false,
+          },
           productionQuantity: 1000,
         },
         originalRecommendationSlots: matchingResult.data.recommendationSlots,
         selectedStrategy: "economy",
-        baseCandidate: matchingResult.data.recommendationSlots[0].evaluation?.candidate,
-        clientState: "recalculated",
+        generationToken: matchingResult.data.generationToken,
       });
     });
     expect(await screen.findByText("保存成功")).toBeTruthy();
@@ -972,236 +900,51 @@ describe("matching page", () => {
     );
   });
 
-  it("marks the final scheme as pending recalculation after changing flute type", async () => {
+  it("keeps selection reason visible after selecting a recommendation", async () => {
+    const result = createMatchingResultWithDetails();
+    result.data.recommendationSlots = result.data.recommendationSlots.map((slot, index) =>
+      index === 0
+        ? {
+            ...slot,
+            selectionReason: createSelectionReason(
+              "模板生成",
+              "在达标且可生产的候选中，优先选择成本更低的方案。",
+            ),
+          }
+        : slot,
+    );
+    mockedGenerateMatchingScheme.mockResolvedValue(result);
+    render(<MatchingPage />);
+
+    fillValidBoxSpecForm();
+    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
+    fireEvent.click(await screen.findByRole("button", { name: "选择经济型" }));
+
+    const economyDetails = screen.getByTestId("recommendation-details-economy");
+    const economySummary = economyDetails.querySelector("summary");
+    expect(economySummary).toBeTruthy();
+    fireEvent.click(economySummary!);
+
+    expect(screen.getByText("当前最终方案：经济型")).toBeTruthy();
+    expect(economyDetails).toHaveProperty("open", true);
+    expect(economyDetails.textContent ?? "").toContain("选型理由");
+    expect(economyDetails.textContent ?? "").toContain("模板生成");
+    expect(economyDetails.textContent ?? "").toContain(
+      "在达标且可生产的候选中，优先选择成本更低的方案。",
+    );
+  });
+
+  it("does not expose manual adjustment or recalculation controls", async () => {
     mockedGenerateMatchingScheme.mockResolvedValue(createMatchingResultWithDetails());
     render(<MatchingPage />);
 
     fillValidBoxSpecForm();
     fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
-    fireEvent.click(await screen.findByRole("button", { name: "选择经济型" }));
-    fireEvent.mouseDown(screen.getByLabelText("调整瓦型"));
-    fireEvent.click(await screen.findByText("BC 楞"));
 
-    expect(screen.getByText("待重新校核")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "确认保存" })).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "重新校核" })).toHaveProperty("disabled", false);
-    expect(screen.queryByRole("link", { name: "完整报告 PDF" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "精简方案表 PDF" })).toBeNull();
-  });
-
-  it("shows recalculated metrics after clicking recalculation", async () => {
-    const matchingResult = createMatchingResultWithDetails();
-    mockedGenerateMatchingScheme.mockResolvedValue(matchingResult);
-    render(<MatchingPage />);
-
-    fillValidBoxSpecForm();
-    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
-    fireEvent.click(await screen.findByRole("button", { name: "选择经济型" }));
-    fireEvent.mouseDown(screen.getByLabelText("调整瓦型"));
-    fireEvent.click(await screen.findByText("BC 楞"));
-    fireEvent.click(screen.getByRole("button", { name: "重新校核" }));
-
-    const recalculatedPanel = await screen.findByTestId("recalculated-final-scheme");
-
-    expect(recalculatedPanel.textContent ?? "").toContain("达标");
-    expect(recalculatedPanel.textContent ?? "").toContain("空箱抗压 900 N");
-    expect(recalculatedPanel.textContent ?? "").toContain("含税成本 2.45 元");
-    await waitFor(() => {
-      expect(mockedRecalculateAdjustedScheme).toHaveBeenCalledWith({
-        boxSpec: {
-          lengthMm: 500,
-          widthMm: 300,
-          heightMm: 250,
-          structureType: "0201",
-          formingMethod: "glue",
-          productType: "食品",
-          productWeightKg: 10,
-          arrangement: "single_row",
-          productionQuantity: 1000,
-        },
-        selectedStrategy: "economy",
-        baseCandidate: matchingResult.data.recommendationSlots[0].evaluation?.candidate,
-        adjustments: expect.objectContaining({
-          fluteType: "BC",
-        }),
-      });
-    });
-  });
-
-  it("shows not manufacturable recalculation without old qualified state", async () => {
-    mockedGenerateMatchingScheme.mockResolvedValue(createMatchingResultWithDetails());
-    mockedRecalculateAdjustedScheme.mockResolvedValue({
-      ok: true,
-      data: {
-        finalEvaluation: createNotManufacturableEvaluation(),
-        finalStatus: "not_manufacturable",
-        isManuallyAdjusted: true,
-        warningMessages: ["最终方案不可生产，不建议生产"],
-        canSave: true,
-      },
-    });
-    render(<MatchingPage />);
-
-    fillValidBoxSpecForm();
-    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
-    fireEvent.click(await screen.findByRole("button", { name: "选择经济型" }));
-    fireEvent.mouseDown(screen.getByLabelText("调整瓦型"));
-    fireEvent.click(await screen.findByText("BC 楞"));
-    fireEvent.click(screen.getByRole("button", { name: "重新校核" }));
-
-    const recalculatedPanel = await screen.findByTestId("recalculated-final-scheme");
-
-    expect(recalculatedPanel.textContent ?? "").toContain("不可生产");
-    expect(recalculatedPanel.textContent ?? "").toContain("不建议生产");
-    expect(recalculatedPanel.textContent ?? "").toContain("纸板宽超过设备限制");
-    expect(recalculatedPanel.textContent ?? "").not.toContain("达标");
-    expect(recalculatedPanel.textContent ?? "").not.toContain("空箱抗压 450 N");
-  });
-
-  it("saves a recalculated adjusted scheme and shows manual adjustment summary", async () => {
-    const matchingResult = createMatchingResultWithDetails();
-    mockedGenerateMatchingScheme.mockResolvedValue(matchingResult);
-    mockedSaveConfirmedMatchingScheme.mockResolvedValue({
-      ok: true,
-      data: {
-        schemeId: "scheme-adjusted-1",
-        finalStatus: "qualified",
-        isManuallyAdjusted: true,
-        warningMessages: [],
-        savedAt: "2026-07-02T08:30:00.000Z",
-      },
-    });
-    render(<MatchingPage />);
-
-    fillValidBoxSpecForm();
-    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
-    fireEvent.click(await screen.findByRole("button", { name: "选择经济型" }));
-    fireEvent.mouseDown(screen.getByLabelText("调整瓦型"));
-    fireEvent.click(await screen.findByText("BC 楞"));
-    fireEvent.click(screen.getByRole("button", { name: "重新校核" }));
-    await screen.findByTestId("recalculated-final-scheme");
-    fireEvent.click(screen.getByRole("button", { name: "确认保存" }));
-
-    await waitFor(() => {
-      expect(mockedSaveConfirmedMatchingScheme).toHaveBeenCalledWith({
-        boxSpec: {
-          lengthMm: 500,
-          widthMm: 300,
-          heightMm: 250,
-          structureType: "0201",
-          formingMethod: "glue",
-          productType: "食品",
-          productWeightKg: 10,
-          arrangement: "single_row",
-          productionQuantity: 1000,
-        },
-        originalRecommendationSlots: matchingResult.data.recommendationSlots,
-        selectedStrategy: "economy",
-        baseCandidate: matchingResult.data.recommendationSlots[0].evaluation?.candidate,
-        adjustments: expect.objectContaining({
-          fluteType: "BC",
-        }),
-        clientState: "recalculated",
-      });
-    });
-
-    const savedPanel = await screen.findByTestId("saved-scheme-summary");
-
-    expect(savedPanel.textContent ?? "").toContain("保存成功");
-    expect(savedPanel.textContent ?? "").toContain("用户已手动调整");
-    expect(savedPanel.textContent ?? "").toContain("达标");
-    expect(savedPanel.textContent ?? "").toContain("2026-07-02T08:30:00.000Z");
-    expect(screen.getByText("推荐方案")).toBeTruthy();
-    await waitFor(() => {
-      expect(screen.getByText("确认保存").closest("button")).toHaveProperty("disabled", true);
-    });
-  });
-
-  it("keeps recalculated result visible when adjusted save fails", async () => {
-    mockedGenerateMatchingScheme.mockResolvedValue(createMatchingResultWithDetails());
-    mockedSaveConfirmedMatchingScheme.mockResolvedValue({
-      ok: false,
-      error: {
-        code: "SAVE_FAILED",
-        message: "方案保存失败，请稍后重试",
-      },
-    });
-    render(<MatchingPage />);
-
-    fillValidBoxSpecForm();
-    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
-    fireEvent.click(await screen.findByRole("button", { name: "选择经济型" }));
-    fireEvent.mouseDown(screen.getByLabelText("调整瓦型"));
-    fireEvent.click(await screen.findByText("BC 楞"));
-    fireEvent.click(screen.getByRole("button", { name: "重新校核" }));
-    const recalculatedPanel = await screen.findByTestId("recalculated-final-scheme");
-    fireEvent.click(screen.getByRole("button", { name: "确认保存" }));
-
-    expect(await screen.findByText("方案保存失败，请稍后重试")).toBeTruthy();
-    expect(recalculatedPanel.textContent ?? "").toContain("空箱抗压 900 N");
-    expect(screen.queryByTestId("saved-scheme-summary")).toBeNull();
-    expect(screen.queryByRole("link", { name: "完整报告 PDF" })).toBeNull();
-    expect(screen.queryByRole("link", { name: "精简方案表 PDF" })).toBeNull();
-  });
-
-  it("disables confirm save for not manufacturable recalculated schemes", async () => {
-    mockedGenerateMatchingScheme.mockResolvedValue(createMatchingResultWithDetails());
-    mockedRecalculateAdjustedScheme.mockResolvedValue({
-      ok: true,
-      data: {
-        finalEvaluation: createNotManufacturableEvaluation(),
-        finalStatus: "not_manufacturable",
-        isManuallyAdjusted: true,
-        warningMessages: ["最终方案不可生产，不建议生产"],
-        canSave: false,
-      },
-    });
-    render(<MatchingPage />);
-
-    fillValidBoxSpecForm();
-    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
-    fireEvent.click(await screen.findByRole("button", { name: "选择经济型" }));
-    fireEvent.mouseDown(screen.getByLabelText("调整瓦型"));
-    fireEvent.click(await screen.findByText("BC 楞"));
-    fireEvent.click(screen.getByRole("button", { name: "重新校核" }));
-    const recalculatedPanel = await screen.findByTestId("recalculated-final-scheme");
-    const saveButton = screen.getByRole("button", { name: "确认保存" });
-
-    expect(recalculatedPanel.textContent ?? "").toContain("不可生产");
-    expect(recalculatedPanel.textContent ?? "").toContain("不建议生产");
-    expect(saveButton).toHaveProperty("disabled", true);
-    expect(mockedSaveConfirmedMatchingScheme).not.toHaveBeenCalled();
-    expect(screen.queryByTestId("saved-scheme-summary")).toBeNull();
-  });
-
-  it("disables confirm save for unqualified recalculated schemes", async () => {
-    mockedGenerateMatchingScheme.mockResolvedValue(createMatchingResultWithDetails());
-    mockedRecalculateAdjustedScheme.mockResolvedValue({
-      ok: true,
-      data: {
-        finalEvaluation: createUnqualifiedEvaluation(),
-        finalStatus: "unqualified",
-        isManuallyAdjusted: true,
-        warningMessages: ["最终方案未达标，不建议生产"],
-        canSave: false,
-      },
-    });
-    render(<MatchingPage />);
-
-    fillValidBoxSpecForm();
-    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
-    fireEvent.click(await screen.findByRole("button", { name: "选择经济型" }));
-    fireEvent.mouseDown(screen.getByLabelText("调整瓦型"));
-    fireEvent.click(await screen.findByText("BC 楞"));
-    fireEvent.click(screen.getByRole("button", { name: "重新校核" }));
-    const recalculatedPanel = await screen.findByTestId("recalculated-final-scheme");
-    const saveButton = screen.getByRole("button", { name: "确认保存" });
-
-    expect(recalculatedPanel.textContent ?? "").toContain("未达标");
-    expect(recalculatedPanel.textContent ?? "").toContain("不建议生产");
-    expect(saveButton).toHaveProperty("disabled", true);
-    expect(mockedSaveConfirmedMatchingScheme).not.toHaveBeenCalled();
-    expect(screen.queryByTestId("saved-scheme-summary")).toBeNull();
+    expect(await screen.findAllByText("含税成本")).not.toHaveLength(0);
+    expect(screen.queryByLabelText("调整瓦型")).toBeNull();
+    expect(screen.queryByRole("button", { name: "重新校核" })).toBeNull();
+    expect(screen.queryByText("待重新校核")).toBeNull();
   });
 
   it("keeps calculated recommendation values read-only on the page", async () => {
@@ -1211,13 +954,50 @@ describe("matching page", () => {
     fillValidBoxSpecForm();
     fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
 
-    expect((await screen.findAllByText("含税成本 2.13 元")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("含税成本")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2.13 元").length).toBeGreaterThan(0);
     expect(screen.queryByLabelText("含税成本")).toBeNull();
     expect(screen.queryByLabelText("耐破")).toBeNull();
     expect(screen.queryByLabelText("边压")).toBeNull();
     expect(screen.queryByLabelText("空箱抗压")).toBeNull();
     expect(screen.queryByLabelText("是否达标")).toBeNull();
     expect(screen.queryByLabelText("是否可生产")).toBeNull();
+  });
+
+  it("shows selection reason source labels and texts on recommendation cards", async () => {
+    const result = createMatchingResultWithDetails();
+    result.data.recommendationSlots = [
+      {
+        ...result.data.recommendationSlots[0]!,
+        selectionReason: createSelectionReason("AI 生成", "成本较低，强度满足要求，可生产。"),
+      },
+      {
+        ...result.data.recommendationSlots[1]!,
+        selectionReason: createSelectionReason(
+          "模板生成",
+          "成本：该方案含税成本为 2.13 元。\n强度：空箱抗压 450 N。\n可生产状态：该方案当前为达标且可生产。\n风险提示：当前未发现强度或设备风险。",
+          "provider_failed",
+        ),
+      },
+      {
+        ...result.data.recommendationSlots[2]!,
+        selectionReason: createSelectionReason("模板生成", "风险提示：当前未发现强度或设备风险。"),
+      },
+    ];
+    mockedGenerateMatchingScheme.mockResolvedValue(result);
+    render(<MatchingPage />);
+
+    fillValidBoxSpecForm();
+    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
+
+    expect(await screen.findByText("AI 生成")).toBeTruthy();
+    expect(screen.getAllByText("模板生成").length).toBeGreaterThan(0);
+    expect(screen.getByText("成本较低，强度满足要求，可生产。")).toBeTruthy();
+    expect(screen.getByText("在达标且可生产的候选中，优先选择安全冗余更高的方案。")).toBeTruthy();
+    expect(screen.getByText("按成本和安全综合表现选择相对平衡的方案。")).toBeTruthy();
+    expect(document.body.textContent ?? "").not.toContain("该方案含税成本为 2.13 元");
+    expect(document.body.textContent ?? "").not.toContain("空箱抗压 450 N");
+    expect(document.body.textContent ?? "").not.toContain("provider_failed");
   });
 
   it("shows save validation errors without leaking technical details", async () => {
@@ -1249,9 +1029,9 @@ describe("matching page", () => {
     fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
 
     expect(await screen.findByText("重复推荐")).toBeTruthy();
-    expect(screen.getByText("该组合同时也是某策略下最优")).toBeTruthy();
+    expect(screen.queryByText("该组合同时也是某策略下最优")).toBeNull();
     expect(screen.getByText("不可用")).toBeTruthy();
-    expect(screen.getByText("没有更多不同的达标可生产候选组合")).toBeTruthy();
+    expect(screen.queryByText("没有更多不同的达标可生产候选组合")).toBeNull();
   });
 
   it("shows reference messages and reasons when no candidate is eligible", async () => {
@@ -1263,9 +1043,9 @@ describe("matching page", () => {
 
     expect(await screen.findByText("当前没有达标可生产方案，以下仅供调整参考")).toBeTruthy();
     expect(screen.getByText("参考方案")).toBeTruthy();
-    expect(screen.getAllByText("边压不足").length).toBeGreaterThan(0);
-    expect(screen.getByText("所有安全型候选抗压富余率超过 200% 上限")).toBeTruthy();
-    expect(screen.getByText("没有可展示的参考方案")).toBeTruthy();
+    expect(screen.queryByText("边压不足")).toBeNull();
+    expect(screen.queryByText("所有安全型候选抗压富余率超过 200% 上限")).toBeNull();
+    expect(screen.queryByText("没有可展示的参考方案")).toBeNull();
   });
 
   it("shows rejected summary counts for all reason types", async () => {
@@ -1281,70 +1061,28 @@ describe("matching page", () => {
     expect(screen.getByText("强度不达标 1")).toBeTruthy();
   });
 
-  it("shows expandable rejected candidate details with every reason", async () => {
+  it("hides rejected candidate details after generation while keeping summary", async () => {
     mockedGenerateMatchingScheme.mockResolvedValue(createMatchingResultWithDetails());
     render(<MatchingPage />);
 
     fillValidBoxSpecForm();
     fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
 
-    expect(await screen.findByText("不可推荐候选明细")).toBeTruthy();
+    expect(await screen.findByText("不推荐原因汇总")).toBeTruthy();
+    expect(screen.queryByText("不可推荐候选明细")).toBeNull();
+    expect(screen.queryByTestId("rejected-candidate-device-rejected")).toBeNull();
+    expect(screen.queryByTestId("rejected-candidate-strength-rejected")).toBeNull();
     expect(
-      screen.getByText(
+      screen.queryByText(
         "3 层 B 楞 - device-rejected-P1 / device-rejected-W1 / device-rejected-P2",
       ),
-    ).toBeTruthy();
-    expect(screen.getByText("纸板宽超过设备限制")).toBeTruthy();
-    expect(screen.getByText("箱高超过设备限制")).toBeTruthy();
-    expect(
-      screen.getByText(
-        "3 层 B 楞 - strength-rejected-P1 / strength-rejected-W1 / strength-rejected-P2",
-      ),
-    ).toBeTruthy();
-    expect(screen.getByText("边压不足")).toBeTruthy();
-  });
-
-  it("does not show strength or cost fields for non-manufacturable candidates", async () => {
-    mockedGenerateMatchingScheme.mockResolvedValue(createMatchingResultWithDetails());
-    render(<MatchingPage />);
-
-    fillValidBoxSpecForm();
-    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
-
-    const deviceSection = await screen.findByTestId("rejected-candidate-device-rejected");
-
-    expect(deviceSection.textContent ?? "").toContain("纸板宽超过设备限制");
-    expect(deviceSection.textContent ?? "").not.toContain("空箱抗压");
-    expect(deviceSection.textContent ?? "").not.toContain("含税成本");
-  });
-
-  it("shows area, strength, and cost for strength-unqualified candidates", async () => {
-    mockedGenerateMatchingScheme.mockResolvedValue(createMatchingResultWithDetails());
-    render(<MatchingPage />);
-
-    fillValidBoxSpecForm();
-    fireEvent.click(screen.getByRole("button", { name: "生成方案" }));
-
-    const strengthSection = await screen.findByTestId("rejected-candidate-strength-rejected");
-
-    expect(strengthSection.textContent ?? "").toContain("面积 0.8905 m²");
-    expect(strengthSection.textContent ?? "").toContain("空箱抗压 450 N");
-    expect(strengthSection.textContent ?? "").toContain("边压 4.50 kN/m");
-    expect(strengthSection.textContent ?? "").toContain("耐破 3800");
-    expect(strengthSection.textContent ?? "").toContain("含税成本 2.13 元");
+    ).toBeNull();
+    expect(screen.queryByText("箱高超过设备限制")).toBeNull();
   });
 
   it("keeps matching page free of core calculation and recommendation formulas", () => {
     const source = readFileSync(
-      join(
-        process.cwd(),
-        "src",
-        "app",
-        "(main)",
-        "matching",
-        "_components",
-        "box-spec-form.tsx",
-      ),
+      join(process.cwd(), "src", "app", "(main)", "matching", "_components", "box-spec-form.tsx"),
       "utf8",
     );
 

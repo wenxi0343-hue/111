@@ -1,6 +1,7 @@
 import type { NormalizedBoxSpec } from "@/modules/box-spec/types";
 import type { CalculationParameters, CandidateEvaluation } from "@/modules/calculations/types";
 import type { RecommendationSlot, RecommendationStrategy } from "@/modules/recommendation/types";
+import type { SelectionReason } from "@/modules/ai-reasoning/types";
 import type { ActionResult } from "@/shared/types/action-result";
 
 import type {
@@ -12,20 +13,20 @@ import type {
 
 export const DEFAULT_PARAMETER_VERSION = "prd-v1-default";
 
-const INCOMPLETE_ORIGINAL_RECOMMENDATIONS_MESSAGE =
-  "原始推荐结果不完整，请重新生成方案";
+const INCOMPLETE_ORIGINAL_RECOMMENDATIONS_MESSAGE = "原始推荐结果不完整，请重新生成方案";
 
 export function createHistorySnapshot(input: {
   boxSpec: NormalizedBoxSpec;
   originalRecommendationSlots: RecommendationSlot[];
   selectedStrategy?: RecommendationStrategy | undefined;
   finalEvaluation: CandidateEvaluation;
+  selectionReason?: SelectionReason | undefined;
   parameters: CalculationParameters;
   isManuallyAdjusted: boolean;
   savedAt: Date;
   parameterVersion?: string | undefined;
 }): ActionResult<MatchingSchemeHistorySnapshot> {
-  if (input.originalRecommendationSlots.length !== 3) {
+  if (input.originalRecommendationSlots.length === 0) {
     return {
       ok: false,
       error: {
@@ -59,6 +60,7 @@ export function createHistorySnapshot(input: {
         ...input.finalEvaluation,
         finalStatus,
         warningMessages,
+        ...(input.selectionReason !== undefined ? { selectionReason: input.selectionReason } : {}),
         parameterSnapshot: input.parameters,
       },
       finalStatus,

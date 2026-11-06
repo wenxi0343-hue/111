@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkBuddy 企业版与个人版采购成本分析报告</title>
+<style>
+  body{font-family:-apple-system,"Microsoft YaHei","PingFang SC",sans-serif;margin:0;background:#f5f6f8;color:#1f2329;line-height:1.65;}
+  .wrap{max-width:1120px;margin:0 auto;padding:32px 28px 60px;}
+  h1{font-size:25px;margin:0 0 6px;color:#0b57d0;}
+  .sub{color:#5a6572;font-size:13px;margin-bottom:24px;}
+  h2{font-size:18px;margin:34px 0 12px;border-left:4px solid #0b57d0;padding-left:10px;}
+  h3{font-size:15px;margin:22px 0 8px;color:#243;}
+  table{width:100%;border-collapse:collapse;background:#fff;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-radius:8px;overflow:hidden;margin:10px 0 6px;}
+  th,td{border:1px solid #e6e8eb;padding:9px 11px;vertical-align:top;}
+  th{background:#eef3fb;color:#243;font-weight:600;text-align:left;}
+  tr:nth-child(even) td{background:#fafbfc;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .price{font-weight:600;color:#0b57d0;}
+  .free{color:#1a7f37;font-weight:600;}
+  .pay{color:#c5221f;font-weight:600;}
+  .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11.5px;margin-right:4px;white-space:nowrap;}
+  .tag.f{background:#e6f4ea;color:#1a7f37;}
+  .tag.p{background:#fce8e6;color:#c5221f;}
+  .tag.b{background:#e8f0fe;color:#0b57d0;}
+  .tag.g{background:#f1f3f4;color:#5a6572;}
+  .note{background:#fff8e1;border-left:4px solid #f9ab00;padding:12px 14px;border-radius:6px;font-size:13px;margin:14px 0;color:#5a4a00;}
+  .key{background:#e8f0fe;border-left:4px solid #0b57d0;padding:14px 16px;border-radius:6px;font-size:14px;margin:16px 0;color:#12305e;}
+  .warn{background:#fce8e6;border-left:4px solid #c5221f;padding:12px 14px;border-radius:6px;font-size:13px;margin:14px 0;color:#7a1a17;}
+  .cards{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0;}
+  .card{flex:1;min-width:210px;background:#fff;border:1px solid #e6e8eb;border-radius:8px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .card .lbl{font-size:12px;color:#5a6572;}
+  .card .big{font-size:23px;font-weight:700;color:#0b57d0;margin:4px 0 2px;font-variant-numeric:tabular-nums;}
+  .card .sml{font-size:12px;color:#5a6572;}
+  ul,ol{margin:8px 0 8px 20px;font-size:13.5px;}
+  li{margin:5px 0;}
+  .src{color:#5a6572;font-size:12px;}
+  .foot{margin-top:40px;padding-top:14px;border-top:1px solid #dfe3e8;color:#5a6572;font-size:12px;}
+  a{color:#0b57d0;}
+  .hl{background:#fff3cd;padding:0 3px;}
+  @media print{body{background:#fff}.wrap{padding:0}.card,table{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>WorkBuddy 企业版与个人版采购成本分析报告</h1>
+<div class="sub">
+适用范围：4 个部门 × 每部门 2–3 人，合计 <b>8–12 人</b>　｜　计价口径：人民币 / 按月与按年双口径　｜　数据核验日期：<b>2026-11-05</b><br>
+价格依据：腾讯云官方文档公示价（企业版版本说明更新于 2026-10-30，计费概述更新于 2026-09-29；个人版定价自 2026-07-01 生效）
+</div>
+
+<div class="key">
+<b>核心结论</b>：按纯现金支出口径，<b>个人版更划算</b>——8–12 人使用个人标准版连续包月为 <b>560–840 元/月</b>，企业旗舰版为 <b>1,584–2,376 元/月</b>，每月相差 <b>1,024–1,536 元</b>（10 人基准：700 元 vs 1,980 元，差 1,280 元/月）。<br>
+<b>按年口径（10 人基准）</b>：个人标准版连续包年 <b>6,720 元/年</b>、企业旗舰版年付 <b>23,760 元/年</b>，全年相差 <b>17,040 元</b>；8 人 / 12 人年差分别为 13,632 元 / 20,448 元。个人版长期使用务必改连续包年（10 人一年比月付省 5,160 元），而企业版年付<b>无任何折扣</b>。<br>
+但存在一个关键反转：<b>企业旗舰版 198 元/人/月 与 个人高级版 199 元/月（月付）几乎同价</b>。若公司原本计划按人配高级版，改买企业版几乎不增加支出，却额外获得账号治理、共享积分池与办公套件。<br>
+<b>推荐路径</b>：先用企业旗舰版按月付小范围试点（3 人 594 元/月 或 8 人 1,584 元/月），2–4 周后按真实用量与治理需求定型。因为企业版年付单价与月付完全相同，先月付再决定是否转年付<b>不损失任何折扣</b>。
+</div>
+
+<div class="cards">
+  <div class="card"><div class="lbl">企业旗舰版 · 8 / 10 / 12 人</div><div class="big">1,584 / 1,980 / 2,376</div><div class="sml">元/月，198 元/人/月，1 席起购</div></div>
+  <div class="card"><div class="lbl">个人标准版 · 连续包月</div><div class="big">560 / 700 / 840</div><div class="sml">元/月，70 元/人/月</div></div>
+  <div class="card"><div class="lbl">差额（10 人基准）</div><div class="big">1,280 元/月</div><div class="sml">按年：个人 6,720 元 vs 企业 23,760 元，年差 17,040 元</div></div>
+  <div class="card"><div class="lbl">专享版适用性</div><div class="big">不适用</div><div class="sml">100 席起购，本规模仅 8–12 席</div></div>
+</div>
+
+<h2>一、测算口径与假设（先看这一节）</h2>
+<table>
+<tr><th style="width:20%">项目</th><th>本报告采用的口径</th></tr>
+<tr><td><b>人数</b></td><td>下限 4×2 = <b>8 人</b>；基准 <b>10 人</b>；上限 4×3 = <b>12 人</b>。全部三档均列出，不取单一估计值。</td></tr>
+<tr><td><b>时间口径</b></td><td>月度部分统一折算为「元/月」，年付价格按 ÷12 折月；年度部分见第三节 3.2–3.5。「连续包年」需一次性预付全年，现金流与月付不同。</td></tr>
+<tr><td><b>年度口径</b></td><td>必须区分两种，否则预算会算错：① <b>年付实付价</b>——官方列示的「连续包年 / 企业年付」一次性年费；② <b>12 个月累计</b>——按月付或连续包月订满一年的实际支出。<span class="hl">企业版两者相等（198×12 = 2,376），个人版差异显著（标准版 1,188 vs 672 元/人/年）</span>。第三节 3.2 起按两种口径分别列示。</td></tr>
+<tr><td><b>主对比档位</b></td><td>个人版取 <b>标准版</b>，企业版取 <b>旗舰版</b>。理由：企业专享版 100 席起购、私有化版需单独询价，对本规模均不可选；个人体验版仅 500 积分/月不足以支撑办公；个人旗舰版 999 元/月已高于企业版席位单价，不具采购合理性。其余档位全部列于第二节备选。</td></tr>
+<tr><td><b>积分口径</b></td><td>主口径采用<b>基础稳定额度</b>（不依赖限时活动）：个人标准版 2,000、高级版 4,000、旗舰版 20,000 Credits/月；企业版 2,000 Credits/人/月、团队共享。<span class="hl">个人版当前有「限时加赠」，实得额度翻倍，但属限时活动，不作为长期预算依据。</span></td></tr>
+<tr><td><b>已排除项</b></td><td>不含实施费、培训费、系统集成费、渠道折扣、发票税点差异、加量包（另列单价）。这些项目官方无统一公示价，不自行估算。</td></tr>
+<tr><td><b>待确认项</b></td><td>① 官方公示价未标注含税 / 不含税；② 公司统一为员工采购个人订阅用于商业办公是否符合服务协议条款；③ 渠道实际成交折扣。此三项<b>未查到官方明确说明，报告不做推断</b>，须在签约前向售前书面确认。</td></tr>
+</table>
+
+<div class="note">
+⚠️ <b>关于「企业版 / 个人版」的命名歧义</b>：官方口径中，「个人版」与「企业版」各自都有名为「旗舰版」的档位，但价格与性质完全不同——<b>个人旗舰版 999 元/月（按人订阅）</b> vs <b>企业旗舰版 198 元/人/月（按席位订阅）</b>。本报告在表格中一律冠以「个人 / 企业」前缀，避免混淆。此外，2026-05-15 调价后企业旗舰版曾用名「SaaS 企业版」、企业专享版曾用名「专有云企业版」，系同一档位。
+</div>
+
+<h2>二、官方公示价格</h2>
+
+<h3>2.1 个人版（按人订阅，无须起购门槛）</h3>
+<table>
+<tr><th>版本</th><th class="num">月付</th><th class="num">连续包月(7折)</th><th class="num">连续包年(5.6折)</th><th class="num">折合元/月</th><th class="num">基础积分/月</th><th class="num">限时实得/月</th><th>其他关键权益</th></tr>
+<tr><td>体验版</td><td class="num free">免费</td><td class="num">—</td><td class="num">—</td><td class="num">0</td><td class="num">500</td><td class="num">500</td><td>5 个项目、单项目 3 人、5GB 资料库</td></tr>
+<tr><td><b>标准版</b> <span class="tag b">主对比</span></td><td class="num price">99 元</td><td class="num price">70 元</td><td class="num">672 元/年</td><td class="num">56</td><td class="num">2,000</td><td class="num">4,000</td><td>10 个项目、单项目 5 人、10GB、15 个自动任务、CLI</td></tr>
+<tr><td>高级版</td><td class="num price">199 元</td><td class="num">140 元</td><td class="num">1,344 元/年</td><td class="num">112</td><td class="num">4,000</td><td class="num">9,000</td><td>15 个项目、单项目 8 人、20GB、30 个自动任务</td></tr>
+<tr><td>旗舰版</td><td class="num price">999 元</td><td class="num">700 元</td><td class="num">6,720 元/年</td><td class="num">560</td><td class="num">20,000</td><td class="num">50,000</td><td>20 个项目、单项目 10 人、50GB、99 个自动任务</td></tr>
+</table>
+<div class="src">说明：WorkBuddy 与 CodeBuddy 同一账号积分共享，无须分别订阅；连续包月 / 包年到期前一日自动续费，可随时取消；开通付费会员后体验版 500 积分不再发放；限时加赠积分自到账日起 1 个月内有效。</div>
+
+<h3>2.2 企业版（按席位订阅）</h3>
+<table>
+<tr><th>版本</th><th>部署方式</th><th>起购</th><th class="num">月付</th><th class="num">年付</th><th class="num">折合元/月</th><th>Credits 与企业管理</th></tr>
+<tr><td><b>旗舰版</b> <span class="tag b">主对比</span></td><td>腾讯云共享 VPC</td><td>1 席</td><td class="num price">198 元/人/月</td><td class="num">2,376 元/人/年</td><td class="num">198</td><td rowspan="3">2,000 Credits/人/月，每月刷新，<b>团队内共享</b>；对话问答不限频<br><br>三档共含：授权管理、单点登录 SSO、研效看板、成员统计、智能体配置、企业模型配置</td></tr>
+<tr><td>专享版</td><td>腾讯云专享 VPC</td><td class="pay">100 席</td><td class="num price">316 元/人/月</td><td class="num">3,792 元/人/年</td><td class="num">316</td></tr>
+<tr><td>私有化企业版</td><td>企业自有环境</td><td>咨询</td><td class="num">单独报价</td><td class="num">单独报价</td><td class="num">—</td></tr>
+</table>
+<div class="src">专享版 / 私有化版额外提供专属网络访问、专属企业插件；私有化版无用量限制。旗舰版下单时须在「Buddy One 智能体套件」与「企业微信联合套件」中二选一，<b>创建企业后不可切换</b>（见第七节）。</div>
+
+<div class="note">
+<b>一个容易算错的点</b>：2,376 ÷ 12 = <b>198 元</b>，3,792 ÷ 12 = <b>316 元</b>。企业版<b>年付单价与月付完全相同，不存在年付折扣</b>；年付仅起锁价与预付作用。相比之下个人版连续包年享 5.6 折（99 → 56 元/月）。因此「为拿折扣而一次性签年单」在企业版并不成立。
+</div>
+
+<h3>2.3 加量包（积分不足时补充）</h3>
+<table>
+<tr><th>适用</th><th>规格与价格</th><th>有效期</th><th class="num">最低单位成本</th></tr>
+<tr><td>个人版（标准版及以上可购）</td><td>1,000 Credits / 50 元</td><td>1 个月</td><td class="num">0.0500 元/Credit</td></tr>
+<tr><td>企业版（旗舰版、专享版）</td><td>2,000 / 100 元；5,000 / 245 元；10,000 / 480 元；50,000 / 2,375 元；200,000 / 9,200 元</td><td>6 个月</td><td class="num">0.0460 元/Credit</td></tr>
+</table>
+<div class="src">个人加量包购买生效后不支持退款或折现。企业加量包规格越大单价越低，且有效期 6 个月（个人仅 1 个月），这是企业版在用量侧的相对优势。</div>
+
+<h2>三、成本测算：按月与按年（8 / 10 / 12 人）</h2>
+<div class="src">本节先列按月成本（含 3.1 月度差额），再列按年成本（3.2–3.5）。两种口径均按 8 / 10 / 12 人三档给出。</div>
+<table>
+<tr><th>方案（每人单价 → 折合元/月/人）</th><th class="num">8 人</th><th class="num">10 人（基准）</th><th class="num">12 人</th><th class="num">10 人 · 12 个月累计</th></tr>
+<tr><td>个人标准版 · 连续包年　<span class="src">56 元</span></td><td class="num free">448</td><td class="num free">560</td><td class="num free">672</td><td class="num">6,720</td></tr>
+<tr><td>个人标准版 · 连续包月　<span class="src">70 元</span></td><td class="num free">560</td><td class="num free">700</td><td class="num free">840</td><td class="num">8,400</td></tr>
+<tr><td>个人标准版 · 月付　<span class="src">99 元</span></td><td class="num">792</td><td class="num">990</td><td class="num">1,188</td><td class="num">11,880</td></tr>
+<tr><td>个人高级版 · 连续包年　<span class="src">112 元</span></td><td class="num">896</td><td class="num">1,120</td><td class="num">1,344</td><td class="num">13,440</td></tr>
+<tr><td>个人高级版 · 连续包月　<span class="src">140 元</span></td><td class="num">1,120</td><td class="num">1,400</td><td class="num">1,680</td><td class="num">16,800</td></tr>
+<tr><td><b>企业旗舰版 · 月付 / 年付</b>　<span class="src">198 元</span></td><td class="num price">1,584</td><td class="num price">1,980</td><td class="num price">2,376</td><td class="num price">23,760</td></tr>
+<tr><td>个人高级版 · 月付　<span class="src">199 元</span></td><td class="num">1,592</td><td class="num">1,990</td><td class="num">2,388</td><td class="num">23,880</td></tr>
+<tr><td>个人旗舰版 · 连续包年　<span class="src">560 元</span></td><td class="num">4,480</td><td class="num">5,600</td><td class="num">6,720</td><td class="num">67,200</td></tr>
+<tr><td>个人旗舰版 · 月付　<span class="src">999 元</span></td><td class="num">7,992</td><td class="num">9,990</td><td class="num">11,988</td><td class="num">119,880</td></tr>
+</table>
+
+<h3>3.1 企业旗舰版相对各个人方案的月度差额（正数＝企业版更贵）</h3>
+<table>
+<tr><th>对比方案</th><th class="num">8 人</th><th class="num">10 人</th><th class="num">12 人</th><th>判读</th></tr>
+<tr><td>vs 个人标准版 · 月付</td><td class="num">+792</td><td class="num">+990</td><td class="num">+1,188</td><td>企业版约贵 1 倍</td></tr>
+<tr><td>vs 个人标准版 · 连续包月</td><td class="num pay">+1,024</td><td class="num pay">+1,280</td><td class="num pay">+1,536</td><td>年化差额 12,288–18,432 元</td></tr>
+<tr><td>vs 个人标准版 · 连续包年</td><td class="num pay">+1,136</td><td class="num pay">+1,420</td><td class="num pay">+1,704</td><td>10 人年化差额 17,040 元</td></tr>
+<tr><td>vs 个人高级版 · 连续包月</td><td class="num">+464</td><td class="num">+580</td><td class="num">+696</td><td>差距明显收窄</td></tr>
+<tr><td>vs 个人高级版 · 月付</td><td class="num free">−8</td><td class="num free">−10</td><td class="num free">−12</td><td><b>企业版反而略便宜</b></td></tr>
+</table>
+<div class="src">差额按「企业旗舰版月付 198 元/人/月」减对应个人方案计算，单位：元/月。企业版年付折月同为 198 元，差额不变。</div>
+
+<h3>3.2 按年成本测算：年度支出总表（单位：元/年）</h3>
+<div class="note">
+<b>年度预算必须区分两种口径</b>：① <b>年付实付价</b>——官方明确列示的「连续包年 / 企业年付」一次性年费，例如个人标准版 672 元/人/年、企业旗舰版 2,376 元/人/年；② <b>12 个月累计</b>——保持月付或连续包月订满一年的实际支出，例如个人标准版月付 99×12 = 1,188 元/人/年。<br>
+<b>企业版两者相等（198×12 = 2,376），个人版两者相差很大（1,188 与 672，一人一年差 516 元）。</b>上表末列「10 人 · 12 个月累计」即口径 ②。
+</div>
+<table>
+<tr><th>方案</th><th class="num">单价 / 人 / 年</th><th class="num">8 人</th><th class="num">10 人（基准）</th><th class="num">12 人</th><th>口径</th></tr>
+<tr><td>个人标准版 · 连续包年</td><td class="num free">672</td><td class="num free">5,376</td><td class="num free">6,720</td><td class="num free">8,064</td><td>年付实付</td></tr>
+<tr><td>个人标准版 · 连续包月 × 12</td><td class="num">840</td><td class="num">6,720</td><td class="num">8,400</td><td class="num">10,080</td><td>12 个月累计</td></tr>
+<tr><td>个人标准版 · 月付 × 12</td><td class="num">1,188</td><td class="num">9,504</td><td class="num">11,880</td><td class="num">14,256</td><td>12 个月累计</td></tr>
+<tr><td>个人高级版 · 连续包年</td><td class="num">1,344</td><td class="num">10,752</td><td class="num">13,440</td><td class="num">16,128</td><td>年付实付</td></tr>
+<tr><td>个人高级版 · 月付 × 12</td><td class="num">2,388</td><td class="num">19,104</td><td class="num">23,880</td><td class="num">28,656</td><td>12 个月累计</td></tr>
+<tr><td>个人旗舰版 · 连续包年</td><td class="num">6,720</td><td class="num">53,760</td><td class="num">67,200</td><td class="num">80,640</td><td>年付实付</td></tr>
+<tr><td>个人旗舰版 · 月付 × 12</td><td class="num">11,988</td><td class="num">95,904</td><td class="num">119,880</td><td class="num">143,856</td><td>12 个月累计</td></tr>
+<tr><td><b>企业旗舰版 · 年付</b></td><td class="num price">2,376</td><td class="num price">19,008</td><td class="num price">23,760</td><td class="num price">28,512</td><td>年付实付</td></tr>
+<tr><td><b>企业旗舰版 · 月付 × 12</b></td><td class="num price">2,376</td><td class="num price">19,008</td><td class="num price">23,760</td><td class="num price">28,512</td><td>12 个月累计，<b>与年付完全相等</b></td></tr>
+</table>
+<div class="src">企业专享版年付 3,792 元/人/年，但 100 席起购，按最低起购量即 379,200 元/年，本规模不适用；私有化企业版需单独询价，不列入静态测算。</div>
+
+<h3>3.3 企业旗舰版年付相对各方案的年度差额（单位：元/年，正数＝企业版更贵）</h3>
+<table>
+<tr><th>对比方案</th><th class="num">8 人</th><th class="num">10 人</th><th class="num">12 人</th><th>判读</th></tr>
+<tr><td>vs 个人标准版 · 连续包年</td><td class="num pay">+13,632</td><td class="num pay">+17,040</td><td class="num pay">+20,448</td><td>最大差额，即「双方都选最优年付」的口径</td></tr>
+<tr><td>vs 个人标准版 · 连续包月 × 12</td><td class="num pay">+12,288</td><td class="num pay">+15,360</td><td class="num pay">+18,432</td><td>对应按月付试点的年化差额</td></tr>
+<tr><td>vs 个人标准版 · 月付 × 12</td><td class="num">+9,504</td><td class="num">+11,880</td><td class="num">+14,256</td><td>个人版不打折时的对照</td></tr>
+<tr><td>vs 个人高级版 · 连续包年</td><td class="num">+8,256</td><td class="num">+10,320</td><td class="num">+12,384</td><td>差距收窄</td></tr>
+<tr><td>vs 个人高级版 · 月付 × 12</td><td class="num free">−96</td><td class="num free">−120</td><td class="num free">−144</td><td><b>企业版反而略便宜</b></td></tr>
+<tr><td>vs 个人旗舰版 · 连续包年</td><td class="num free">−34,752</td><td class="num free">−43,440</td><td class="num free">−52,128</td><td>个人旗舰版单价过高，不具采购合理性</td></tr>
+</table>
+
+<h3>3.4 年付到底省多少：个人版有折扣，企业版没有</h3>
+<table>
+<tr><th>方案切换</th><th class="num">元 / 人 / 年 变化</th><th class="num">人均年节省</th><th class="num">10 人合计年节省</th><th>说明</th></tr>
+<tr><td>个人标准版：月付 → 连续包年</td><td class="num">1,188 → 672</td><td class="num free">516</td><td class="num free">5,160</td><td>5.6 折，长期使用必选</td></tr>
+<tr><td>个人标准版：连续包月 → 连续包年</td><td class="num">840 → 672</td><td class="num free">168</td><td class="num free">1,680</td><td>已享 7 折后的额外收益</td></tr>
+<tr><td>个人高级版：月付 → 连续包年</td><td class="num">2,388 → 1,344</td><td class="num free">1,044</td><td class="num free">10,440</td><td>5.6 折</td></tr>
+<tr><td>个人旗舰版：月付 → 连续包年</td><td class="num">11,988 → 6,720</td><td class="num free">5,268</td><td class="num free">52,680</td><td>5.6 折，绝对金额最大</td></tr>
+<tr><td><b>企业旗舰版：月付 → 年付</b></td><td class="num">2,376 → 2,376</td><td class="num pay">0</td><td class="num pay">0</td><td><b>官方公示价下年付无任何折扣</b>，仅锁价与预付</td></tr>
+</table>
+<div class="src">结论：若最终选个人版，务必转连续包年（10 人标准版一年省 5,160 元）；若选企业版，签年单不产生价格收益，只带来现金流占用与人数调整刚性。</div>
+
+<h3>3.5 年度现金流与预算提示（10 人基准）</h3>
+<table>
+<tr><th>方案</th><th>付款节奏</th><th class="num">首期支出</th><th class="num">全年支出</th></tr>
+<tr><td>个人标准版 · 连续包年</td><td>一次性预付 12 个月</td><td class="num">6,720</td><td class="num free">6,720</td></tr>
+<tr><td>个人标准版 · 连续包月</td><td>分 12 期，每期 700 元</td><td class="num">700</td><td class="num">8,400</td></tr>
+<tr><td>企业旗舰版 · 年付</td><td>一次性预付 12 个月</td><td class="num">23,760</td><td class="num price">23,760</td></tr>
+<tr><td>企业旗舰版 · 月付</td><td>分 12 期，每期 1,980 元</td><td class="num">1,980</td><td class="num price">23,760</td></tr>
+</table>
+<div class="src">企业版年付需一次性占用 19,008–28,512 元（8–12 人），但全年总额与月付完全相同；在人数可能从 8 变到 12 的试点阶段，月付弹性更有价值。另：加量包有效期企业版 6 个月、个人版 1 个月，若全年持续超额，企业版每年约需购 2 次、个人版最多 12 次，年度预算应据此预留。</div>
+
+<div class="key">
+<b>按年口径结论</b>：10 人全年，付费方案中最低为 <b>个人标准版连续包年 6,720 元</b>，企业方案为 <b>23,760 元（年付与月付同价）</b>，年差 <b>17,040 元</b>；8 人 / 12 人分别为 13,632 元 / 20,448 元。<b>年度维度不改变选型结论</b>——纯成本仍选个人版，治理刚需仍选企业版；但年度维度揭示了一个额外动作：选个人版必须改连续包年，选企业版则不必急于签年单。
+</div>
+
+<h2>四、各自优势对比</h2>
+<table>
+<tr><th style="width:17%">维度</th><th style="width:41%">个人版</th><th>企业版（旗舰版）</th></tr>
+<tr><td><b>单价与折扣</b></td><td><span class="tag f">占优</span> 标准版 99 元/月；连续包月 7 折 70 元；连续包年 5.6 折折合 56 元/月。折扣确定性高、明示在官网。</td><td>198 元/人/月，<b>年付无折扣</b>；但公示价通常存在渠道议价空间，需正式报价确认。</td></tr>
+<tr><td><b>积分额度 / 单位成本</b></td><td><span class="tag f">占优</span> 基础额度 2,000–20,000/人/月；单位成本 0.028–0.050 元/Credit（按稳定额度）。当前限时加赠使实得额度翻倍。</td><td>2,000 Credits/人/月 = <b>0.099 元/Credit</b>，约为个人版的 2–3.5 倍；但加量包最低 0.046 元/Credit 且有效期 6 个月，可低成本补足。</td></tr>
+<tr><td><b>积分共享</b></td><td>各账号额度<b>独立、不可调剂</b>；有人用不完、有人不够用。</td><td><span class="tag f">占优</span> 团队共享池，10 席 = 20,000 Credits/月统一调度，削峰填谷。4 部门用量不均时价值明显。</td></tr>
+<tr><td><b>账号归属与回收</b></td><td><span class="tag p">短板</span> 账号属员工个人，公司无法统一分配、回收；离职后资料库、项目、智能体、自动化任务难以交接。</td><td><span class="tag f">占优</span> 授权管理可统一分配/回收席位，人员变动不影响组织资产。</td></tr>
+<tr><td><b>管控与审计</b></td><td>无 SSO、无用量看板、无成员统计、无审计。</td><td><span class="tag f">占优</span> SSO 单点登录、研效看板、成员统计、智能体/企业模型配置、Admin 后台。</td></tr>
+<tr><td><b>内置办公套件</b></td><td>无。</td><td><span class="tag f">占优</span> 选 Buddy One 套件可一次获得腾讯文档、腾讯乐享知识库、腾讯设计 Ardot、腾讯网盘（每席 50G）、安全与效能运营平台，含 WorkBuddy + CodeBuddy；价格不另加。</td></tr>
+<tr><td><b>跨部门协作</b></td><td>标准版单项目最多 5 人、高级版 8 人、旗舰版 10 人；12 人全员无法同处一个项目。</td><td><span class="tag f">占优</span> 企业控制台自建组织架构，可接入飞书 / 钉钉 / 企业微信 / AD，适合 4 部门结构。</td></tr>
+<tr><td><b>采购与财务流程</b></td><td>需逐人订阅、逐人报销，12 人 × 12 月可达 144 笔；发票归个人，财务对账零散。</td><td><span class="tag f">占优</span> 一张合同、集中计费、统一开票，可按部门分配预算与额度上限。</td></tr>
+<tr><td><b>人数波动弹性</b></td><td><span class="tag f">占优</span> 随时增减、随时取消续费，无起购门槛、无合同。</td><td>1 席起购、可按月订阅，弹性尚可；但若转年付，人数变动与退改条款须签约前书面确认。</td></tr>
+<tr><td><b>部署与数据隔离</b></td><td>公有云个人账号。</td><td>共享 VPC（旗舰版）；如需专属 VPC 则须专享版，但 <b>100 席起购</b>，本规模不适用。</td></tr>
+</table>
+
+<h2>五、哪个更划算：分口径判断</h2>
+
+<h3>5.1 口径 A —— 只看现金支出：个人版明确更划算</h3>
+<p style="font-size:13.5px;margin:6px 0">以 10 人基准、个人标准版连续包月对比企业旗舰版月付：每月 700 元 vs 1,980 元，<b>每月省 1,280 元，一年省 15,360 元</b>；8 人与 12 人分别省 12,288 元/年、18,432 元/年。若采用个人版连续包年（56 元/人/月），10 人年化差额扩大到 <b>17,040 元</b>。对 8–12 人规模，这是一笔可观的固定支出差异。</p>
+
+<h3>5.2 口径 B —— 单位算力经济性：个人版同样更优</h3>
+<table>
+<tr><th>方案</th><th class="num">月度支出/人</th><th class="num">稳定额度/人</th><th class="num">元 / Credit</th><th class="num">相对企业版</th></tr>
+<tr><td>个人标准版 · 连续包年</td><td class="num">56</td><td class="num">2,000</td><td class="num free">0.0280</td><td class="num">企业版贵 3.5 倍</td></tr>
+<tr><td>个人标准版 · 连续包月</td><td class="num">70</td><td class="num">2,000</td><td class="num free">0.0350</td><td class="num">企业版贵 2.8 倍</td></tr>
+<tr><td>个人标准版 · 月付</td><td class="num">99</td><td class="num">2,000</td><td class="num">0.0495</td><td class="num">企业版贵 2.0 倍</td></tr>
+<tr><td><b>企业旗舰版</b></td><td class="num">198</td><td class="num">2,000（共享）</td><td class="num pay">0.0990</td><td class="num">基准</td></tr>
+<tr><td>企业加量包（200,000 规格）</td><td class="num">—</td><td class="num">按需</td><td class="num">0.0460</td><td class="num">可用于补足超额用量</td></tr>
+</table>
+<div class="src">若把个人版「限时加赠」计入，差距进一步拉大到约 4 倍（个人标准版 99 元 / 4,000 Credits = 0.0248 元/Credit）。但该活动为限时，不进入长期预算。</div>
+
+<h3>5.3 口径 C —— 含治理成本：结论可能反转</h3>
+<p style="font-size:13.5px;margin:6px 0">企业版相对个人标准版月付的溢价为 <b>99 元/人/月</b>（198 − 99），10 人合计 990 元/月。因此判断标准可归结为一个可验证的问题：<b>这 99 元/人/月，是否低于「账号无法回收、离职数据无法交接、逐人报销对账、积分无法共享造成浪费」的隐性成本？</b></p>
+<ul>
+<li>若公司需要统一账号管理、审计留痕、集中开票，或员工已在使用企业微信 / 飞书 / 钉钉组织体系 → 企业版更划算，溢价换来的是治理权与组织资产。</li>
+<li>若仅作为个人效率工具、无合规与交接要求、预算优先 → 个人版更划算，且个人版折扣力度远大于企业版。</li>
+<li><b>特别提示</b>：若原本拟按人配「个人高级版月付 199 元」，改买企业旗舰版（198 元/人/月）几乎不增加成本（10 人每月还少 10 元），却额外获得 SSO、审计、共享积分池与五款办公套件。<span class="hl">在此前提下，企业版是严格更优解。</span></li>
+</ul>
+
+<div class="key">
+<b>综合判断</b>：本题不存在脱离前提的唯一答案。以「公司统一付费、跨 4 个部门、8–12 人」这一场景，<b>纯成本口径下个人标准版连续包月最省；组织治理口径下企业旗舰版更稳</b>。考虑到价差仅约 1,000–1,500 元/月，且企业版按月付可随时退出，<b>建议不要一次性签年单，先用月付试点把「真实用量 + 治理需求」这两个变量测出来</b>，再定型。这比直接按价格拍板更节省总成本。
+</div>
+
+<h2>六、落地建议（分三步，每步有验收标准）</h2>
+<table>
+<tr><th style="width:16%">阶段</th><th>动作</th><th style="width:31%">验收标准</th><th class="num" style="width:13%">成本</th></tr>
+<tr><td><b>1. 试点</b></td><td>选 1 个部门 3 人（或 8 人全员）购买企业旗舰版<b>按月付</b>，试用 2–4 周。下单前先确定权益类型（见下方风险 1）。</td><td>记录每人实际 Credits 消耗、日均任务数、是否触及额度上限；确认 SSO / 组织架构能否对接现有账号体系。</td><td class="num">594 元/月<br><span class="src">或 1,584 元/月</span></td></tr>
+<tr><td><b>2. 定型</b></td><td>按试点数据判断：① 若治理是刚需 → 全量企业旗舰版 8–12 席；② 若纯个人效率工具 → 统一改个人标准版连续包月；③ 若用量超额度 → 加购企业加量包而非升席位。</td><td>形成书面结论：席位数、订阅周期、是否需加量包、预算归属到部门；取得正式报价并确认含税口径与合同退改条款。</td><td class="num">1,584–2,376 元/月<br><span class="src">或 560–840 元/月</span></td></tr>
+<tr><td><b>3. 复核</b></td><td>试用期内保持月付，不转年付；次月复核人数与用量后再决定是否签年单。</td><td>确认人数波动条款、增购生效时间、续费价格；确认渠道折扣是否真实优于官网公示价。</td><td class="num">无额外支出</td></tr>
+</table>
+<div class="src"><b>为什么先月付不吃亏</b>：企业版年付 2,376 元/人/年 = 月付 198 元 × 12，官方公示价下年付<b>没有任何折扣</b>。因此「先按月试点 → 再决定年付」不会损失价格优惠，反而保留人数调整弹性、避免一次性预付 19,008–28,512 元。</div>
+
+<h2>七、风险与待确认事项</h2>
+<ol>
+<li><b>权益类型不可逆（最高优先级）</b>：企业旗舰版下单时须在「Buddy One 智能体套件」（含 WorkBuddy + CodeBuddy、腾讯文档、乐享、Ardot、网盘、安全效能平台）与「企业微信联合套件」（企微上下文、群聊/文档/会议/微盘调用，<b>不含</b> CodeBuddy 与办公协同产品）之间二选一。官方明确：<b>创建企业后无法切换套件类型</b>，两者同价。须在采购前依据公司实际 IM 体系决策。</li>
+<li><b>限时加赠不可作长期预算依据</b>：个人版「每月实得 4,000 / 9,000 / 50,000」含限时加赠，加赠积分自到账日起仅 1 个月有效，且官方保留调整权利。长期测算应按基础额度 2,000 / 4,000 / 20,000。</li>
+<li><b>年付占用现金流且无折扣</b>：10 席年付需一次性支付 23,760 元；人数从 8 变到 12 时的扩容单价、缩容与退改条款需签约前书面确认。</li>
+<li><b>专享版起购门槛</b>：100 席起购，8–12 人规模无法按需采购。若信息安全部门确有独享 VPC 要求，须向售前书面确认能否低于 100 席及对应费用，不能直接按 12 × 316 元估算。</li>
+<li><b>「对话问答不限频」≠ 任务不消耗 Credits</b>：Credits 消耗由模型类型、Token 用量及任务复杂度共同决定。额度是否够用必须以实测数据判断，不能按席位单价倒推。</li>
+<li><b>公示价不是总成本</b>：企业采购还可能涉及实施、培训、系统集成、数据准备与持续支持，官方无统一定价，代理商单独报价。预算表应将这些项目列为「待确认」，不得默认为免费。个人版无此费用但也无对应服务。</li>
+<li><b>价格存在调整历史</b>：2026-05-15 起企业版执行新计费方案（据公开报道，旗舰版由 78 元/人/月 调整为 198 元/人/月，专享版由 158 调整为 316）。说明价格波动风险实际存在，签约须以当期正式报价与合同为准。</li>
+<li><b>公司统一采购个人版的合规性</b>：官方个人版定价页声明其构成服务协议组成部分，但<b>未查到「企业为员工统一购买个人订阅用于商业办公」是否允许的明确条款</b>。本报告不做推断，建议售前书面确认后再走个人版路线，避免账号归属与授权争议。</li>
+<li><b>含税口径</b>：官方公示价未标注含税 / 不含税，实际开票金额与税点需以报价单确认。这会影响最终可比成本。</li>
+</ol>
+
+<h2>八、数据来源与冲突数据处理</h2>
+<table>
+<tr><th style="width:34%">来源</th><th style="width:14%">性质</th><th>用途与更新时间</th></tr>
+<tr><td><a href="https://www.codebuddy.cn/docs/workbuddy/Pricing">WorkBuddy 官方 · 定价详情</a></td><td><span class="tag b">官方</span></td><td>个人版四档价格、折扣、积分与权益。2026-07-01 起生效。</td></tr>
+<tr><td><a href="https://cloud.tencent.com/document/product/1831/134332">腾讯云 · WorkBuddy Enterprise 版本说明</a></td><td><span class="tag b">官方</span></td><td>企业版三档价格、起购门槛、企业管理能力、权益类型。<b>最近更新 2026-10-30 16:45</b>。</td></tr>
+<tr><td><a href="https://cloud.tencent.com/document/product/1831/134333">腾讯云 · 计费概述</a></td><td><span class="tag b">官方</span></td><td>企业版月付/年付价格、加量包规格、2026-05-15 计费调整说明。<b>最近更新 2026-09-29 16:27</b>。</td></tr>
+<tr><td><a href="https://cloud.tencent.com/developer/article/2705332">腾讯云开发者社区文章</a>、<a href="https://www.workbuddycc.com/pricing.html">授权代理商价格页</a></td><td><span class="tag g">交叉验证</span></td><td>用于核对个人版折扣算法与企业版公示价；第三方 2026-11-02 采集值与官方一致，未发现 10–11 月调价。</td></tr>
+</table>
+
+<div class="warn">
+<b>已排除的冲突数据（不采信，逐条说明）</b>：检索中出现一篇第三方文章称「个人版按 Token 分 Lite 39 元 / Standard 99 元 / Pro 299 元，企业公有云版 5,000 元/月起、私有化数十万至百万级，2026-05-15 涨幅约 15%」。该说法与腾讯云官方公示价（个人版体验/标准 99/高级 199/旗舰 999；企业旗舰 198 元/人/月起、1 席起购）在档位结构、单价与起购门槛上均矛盾，且该文带有其他厂商推广性质，故<b>整体未采信</b>。本报告所有价格仅取自上述三份官方文档。
+</div>
+
+<div class="foot">
+报告生成时间：2026-11-05　｜　测算口径：官方公示价静态测算，未含渠道折扣、实施培训、税费差异　｜　<b>最终价格以正式报价单与合同为准</b><br>
+本报告与「配纸工具」项目代码无关，为独立采购分析文档；未修改项目内任何现有文件。
+</div>
+
+</div>
+</body>
+</html>

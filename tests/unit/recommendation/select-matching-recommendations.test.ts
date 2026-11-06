@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { PRODUCT_TYPES } from "@/modules/box-spec/constants";
+import type { NormalizedBoxSpec } from "@/modules/box-spec/types";
 import { DEFAULT_CALCULATION_PARAMETERS } from "@/modules/calculations/default-parameters";
 import type {
   BoardAreaResult,
@@ -8,13 +10,12 @@ import type {
   DeviceLimitResult,
   EligibleCandidateEvaluation,
   EvaluateMatchingCandidatesResult,
+  FluteType,
   MatchingCandidate,
   RejectedCandidateEvaluation,
   StrengthResult,
 } from "@/modules/calculations/types";
-import { createMatchingCandidateFingerprint } from "@/modules/recommendation/scoring";
 import { selectMatchingRecommendations } from "@/modules/recommendation/select-matching-recommendations";
-import type { RecommendationHistoricalHabitInfo } from "@/modules/recommendation/types";
 
 function createLayer(overrides: Partial<CandidateLayer>): CandidateLayer {
   return {
@@ -31,18 +32,26 @@ function createLayer(overrides: Partial<CandidateLayer>): CandidateLayer {
   };
 }
 
-function createCandidate(id: string): MatchingCandidate {
+function createCandidate(input: {
+  id: string;
+  fluteType?: Extract<FluteType, "A" | "B" | "C" | "E">;
+  outerWeight?: number;
+  corrugatingWeight?: number;
+  innerWeight?: number;
+}): MatchingCandidate {
+  const fluteType = input.fluteType ?? "B";
+
   return {
-    id,
+    id: input.id,
     layerCount: 3,
-    fluteType: "B",
+    fluteType,
     layers: [
       createLayer({
         role: "outer_liner",
         paper: {
-          id: `${id}-outer`,
-          paperCode: `${id}-P1`,
-          gramWeightGsm: 200,
+          id: `${input.id}-outer`,
+          paperCode: `${input.id}-P1`,
+          gramWeightGsm: input.outerWeight ?? 200,
           priceYuanPerTon: 3000,
           burstIndex: 10,
           ringCrushIndex: 20,
@@ -50,11 +59,11 @@ function createCandidate(id: string): MatchingCandidate {
       }),
       createLayer({
         role: "corrugating",
-        flute: "B",
+        flute: fluteType,
         paper: {
-          id: `${id}-corrugating`,
-          paperCode: `${id}-W1`,
-          gramWeightGsm: 160,
+          id: `${input.id}-corrugating`,
+          paperCode: `${input.id}-W1`,
+          gramWeightGsm: input.corrugatingWeight ?? 160,
           priceYuanPerTon: 2800,
           burstIndex: 10,
           ringCrushIndex: 20,
@@ -63,9 +72,9 @@ function createCandidate(id: string): MatchingCandidate {
       createLayer({
         role: "inner_liner",
         paper: {
-          id: `${id}-inner`,
-          paperCode: `${id}-P2`,
-          gramWeightGsm: 200,
+          id: `${input.id}-inner`,
+          paperCode: `${input.id}-P2`,
+          gramWeightGsm: input.innerWeight ?? 200,
           priceYuanPerTon: 3000,
           burstIndex: 10,
           ringCrushIndex: 20,
@@ -79,22 +88,33 @@ function createEligibleEvaluation(input: {
   id: string;
   costYuan: number;
   bctN: number;
+  burstStrength?: number | undefined;
+  edgeCrushKnPerM?: number | undefined;
+  candidate?: MatchingCandidate | undefined;
+  strengthRequirement?:
+    | {
+        minBctN: number;
+        minEdgeCrushKnPerM: number;
+        minBurstStrength: number;
+      }
+    | undefined;
 }): EligibleCandidateEvaluation {
   return {
     status: "eligible",
-    candidate: createCandidate(input.id),
+    candidate: input.candidate ?? createCandidate({ id: input.id }),
     area: {} as BoardAreaResult,
     device: {
       isManufacturable: true,
       reasons: [],
     } satisfies DeviceLimitResult,
     strength: {
-      burstStrength: 3800,
-      edgeCrushNPerM: 4500,
-      edgeCrushKnPerM: 4.5,
+      burstStrength: input.burstStrength ?? 3800,
+      edgeCrushNPerM: (input.edgeCrushKnPerM ?? 4.5) * 1000,
+      edgeCrushKnPerM: input.edgeCrushKnPerM ?? 4.5,
       bctN: input.bctN,
       isQualified: true,
       reasons: [],
+      ...(input.strengthRequirement ? { requirement: input.strengthRequirement } : {}),
     } satisfies StrengthResult,
     cost: {
       utilizationRate: 0.88,
@@ -124,7 +144,7 @@ function createRejectedEvaluation(input: {
 
   return {
     status: "rejected",
-    candidate: createCandidate(input.id),
+    candidate: createCandidate({ id: input.id }),
     reasons,
     area: {} as BoardAreaResult,
     device: {
@@ -154,7 +174,7 @@ function createRejectedEvaluation(input: {
 function createRejectedWithoutDisplayData(id: string): RejectedCandidateEvaluation {
   return {
     status: "rejected",
-    candidate: createCandidate(id),
+    candidate: createCandidate({ id }),
     reasons: [
       {
         type: "DATA_MISSING",
@@ -177,353 +197,397 @@ function createEvaluationResult(input: {
 }
 
 describe("selectMatchingRecommendations", () => {
-  it("returns fixed economy, safety, and balanced slots", () => {
-    const economy = createEligibleEvaluation({ id: "economy", costYuan: 2.1, bctN: 520 });
-    const safety = createEligibleEvaluation({ id: "safety", costYuan: 2.5, bctN: 760 });
-    const balanced = createEligibleEvaluation({ id: "balanced", costYuan: 2.3, bctN: 640 });
+  it("returns standard and cost-down slots for a normal order", () => {
+    const standard = createEligibleEvaluation({
+      id: "standard",
+      costYuan: 2.3,
+      bctN: 500,
+      burstStrength: 125,
+      edgeCrushKnPerM: 5,
+    });
+    const costDown = createEligibleEvaluation({
+      id: "cost-down",
+      costYuan: 2.1,
+      bctN: 460,
+      burstStrength: 115,
+      edgeCrushKnPerM: 4.6,
+    });
+    const excessive = createEligibleEvaluation({
+      id: "excessive",
+      costYuan: 2.6,
+      bctN: 760,
+      burstStrength: 190,
+      edgeCrushKnPerM: 7.6,
+    });
 
     const result = selectMatchingRecommendations({
       evaluation: createEvaluationResult({
-        eligibleCandidates: [safety, balanced, economy],
+        eligibleCandidates: [costDown, excessive, standard],
       }),
       parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec(),
     });
 
-    expect(result.slots).toHaveLength(3);
-    expect(result.slots.map((slot) => slot.title)).toEqual(["经济型", "安全型", "均衡型"]);
+    expect(result.slots.map((slot) => slot.strategy)).toEqual(["standard", "cost_down"]);
+    expect(result.slots.map((slot) => slot.title)).toEqual(["标准方案", "降本方案"]);
+    expect(result.slots[0]!.evaluation?.candidate.id).toBe("standard");
+    expect(result.slots[1]!.evaluation?.candidate.id).toBe("cost-down");
   });
 
-  it("selects the lowest tax-included cost for the economy slot", () => {
-    const lowCost = createEligibleEvaluation({ id: "low-cost", costYuan: 2.1, bctN: 520 });
-    const midCost = createEligibleEvaluation({ id: "mid-cost", costYuan: 2.3, bctN: 640 });
-    const highCost = createEligibleEvaluation({ id: "high-cost", costYuan: 2.5, bctN: 760 });
+  it("adds an enhanced slot when special requirements are present", () => {
+    const standard = createEligibleEvaluation({
+      id: "standard",
+      costYuan: 2.3,
+      bctN: 500,
+      burstStrength: 125,
+      edgeCrushKnPerM: 5,
+    });
+    const costDown = createEligibleEvaluation({
+      id: "cost-down",
+      costYuan: 2.1,
+      bctN: 460,
+      burstStrength: 115,
+      edgeCrushKnPerM: 4.6,
+    });
+    const enhanced = createEligibleEvaluation({
+      id: "enhanced",
+      costYuan: 2.7,
+      bctN: 700,
+      burstStrength: 175,
+      edgeCrushKnPerM: 7,
+    });
 
     const result = selectMatchingRecommendations({
       evaluation: createEvaluationResult({
-        eligibleCandidates: [highCost, midCost, lowCost],
+        eligibleCandidates: [costDown, enhanced, standard],
       }),
       parameters: DEFAULT_CALCULATION_PARAMETERS,
-    });
-
-    expect(result.slots[0].evaluation?.candidate.id).toBe("low-cost");
-  });
-
-  it("selects the highest safety surplus at or under 200% for the safety slot", () => {
-    const medium = createEligibleEvaluation({ id: "medium", costYuan: 2.1, bctN: 520 });
-    const high = createEligibleEvaluation({ id: "high", costYuan: 2.3, bctN: 760 });
-    const overLimit = createEligibleEvaluation({ id: "over-limit", costYuan: 2.0, bctN: 840 });
-
-    const result = selectMatchingRecommendations({
-      evaluation: createEvaluationResult({
-        eligibleCandidates: [medium, overLimit, high],
+      boxSpec: createBoxSpec({
+        specialRequirements: {
+          dieCutting: false,
+          punctureStrengthRequired: false,
+          notes: "贵重物品",
+        },
       }),
-      parameters: DEFAULT_CALCULATION_PARAMETERS,
     });
 
-    expect(result.slots[1].evaluation?.candidate.id).toBe("high");
-  });
-
-  it("selects the highest balanced score for the balanced slot", () => {
-    const cheapest = createEligibleEvaluation({ id: "cheapest", costYuan: 2, bctN: 420 });
-    const safest = createEligibleEvaluation({ id: "safest", costYuan: 4, bctN: 800 });
-    const balanced = createEligibleEvaluation({ id: "balanced", costYuan: 2.8, bctN: 640 });
-
-    const result = selectMatchingRecommendations({
-      evaluation: createEvaluationResult({
-        eligibleCandidates: [cheapest, safest, balanced],
-      }),
-      parameters: DEFAULT_CALCULATION_PARAMETERS,
-    });
-
-    expect(result.slots[2].evaluation?.candidate.id).toBe("balanced");
-  });
-
-  it("marks three different best strategy candidates as recommended", () => {
-    const economy = createEligibleEvaluation({ id: "economy", costYuan: 2, bctN: 420 });
-    const safety = createEligibleEvaluation({ id: "safety", costYuan: 4, bctN: 800 });
-    const balanced = createEligibleEvaluation({ id: "balanced", costYuan: 2.8, bctN: 640 });
-
-    const result = selectMatchingRecommendations({
-      evaluation: createEvaluationResult({
-        eligibleCandidates: [economy, safety, balanced],
-      }),
-      parameters: DEFAULT_CALCULATION_PARAMETERS,
-    });
-
-    expect(result.slots.map((slot) => slot.status)).toEqual([
-      "recommended",
-      "recommended",
-      "recommended",
+    expect(result.slots.map((slot) => slot.strategy)).toEqual([
+      "standard",
+      "cost_down",
+      "enhanced",
     ]);
-    expect(new Set(result.slots.map((slot) => slot.evaluation?.candidate.id)).size).toBe(3);
+    expect(result.slots[2]!.title).toBe("增强方案");
+    expect(result.slots[2]!.evaluation?.candidate.id).toBe("enhanced");
   });
 
-  it("does not select rejected candidates for economy or safety slots", () => {
+  it("uses the weakest strength surplus to choose a standard candidate in the target range", () => {
+    const cheapButNearLimit = createEligibleEvaluation({
+      id: "cheap-but-near-limit",
+      costYuan: 2.1,
+      bctN: 420,
+      burstStrength: 105,
+      edgeCrushKnPerM: 4.2,
+    });
+    const inTarget = createEligibleEvaluation({
+      id: "in-target",
+      costYuan: 2.3,
+      bctN: 500,
+      burstStrength: 125,
+      edgeCrushKnPerM: 5,
+    });
+    const tooStrong = createEligibleEvaluation({
+      id: "too-strong",
+      costYuan: 2.6,
+      bctN: 760,
+      burstStrength: 190,
+      edgeCrushKnPerM: 7.6,
+    });
+
+    const result = selectMatchingRecommendations({
+      evaluation: createEvaluationResult({
+        eligibleCandidates: [cheapButNearLimit, tooStrong, inTarget],
+      }),
+      parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec(),
+    });
+
+    expect(result.slots[0]!.evaluation?.candidate.id).toBe("in-target");
+  });
+
+  it("uses the dynamic strength requirement instead of the static layer threshold for standard surplus", () => {
+    const dynamicRequirement = {
+      minBctN: 600,
+      minEdgeCrushKnPerM: 6,
+      minBurstStrength: 150,
+    };
+    const staticThresholdTargetOnly = createEligibleEvaluation({
+      id: "static-threshold-target-only",
+      costYuan: 2.1,
+      bctN: 500,
+      burstStrength: 125,
+      edgeCrushKnPerM: 5,
+      strengthRequirement: dynamicRequirement,
+    });
+    const dynamicTarget = createEligibleEvaluation({
+      id: "dynamic-target",
+      costYuan: 2.4,
+      bctN: 700,
+      burstStrength: 175,
+      edgeCrushKnPerM: 7,
+      strengthRequirement: dynamicRequirement,
+    });
+
+    const result = selectMatchingRecommendations({
+      evaluation: createEvaluationResult({
+        eligibleCandidates: [staticThresholdTargetOnly, dynamicTarget],
+      }),
+      parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec({
+        productWeightKg: 19,
+        stackingRequirement: {
+          status: "required",
+          stackingLayers: 5,
+          displayText: "stacking 5 layers",
+        },
+      }),
+    });
+
+    expect(result.slots[0]!.evaluation?.candidate.id).toBe("dynamic-target");
+  });
+
+  it("only accepts cost-down candidates cheaper than standard and at least 90% as strong", () => {
+    const standard = createEligibleEvaluation({
+      id: "standard",
+      costYuan: 2.3,
+      bctN: 500,
+      burstStrength: 125,
+      edgeCrushKnPerM: 5,
+    });
+    const tooWeak = createEligibleEvaluation({
+      id: "too-weak",
+      costYuan: 2,
+      bctN: 430,
+      burstStrength: 107,
+      edgeCrushKnPerM: 4.3,
+    });
+    const cheaperButStrongEnough = createEligibleEvaluation({
+      id: "cheaper-strong-enough",
+      costYuan: 2.1,
+      bctN: 455,
+      burstStrength: 114,
+      edgeCrushKnPerM: 4.55,
+    });
+
+    const result = selectMatchingRecommendations({
+      evaluation: createEvaluationResult({
+        eligibleCandidates: [tooWeak, cheaperButStrongEnough, standard],
+      }),
+      parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec(),
+    });
+
+    expect(result.slots[1]!.evaluation?.candidate.id).toBe("cheaper-strong-enough");
+  });
+
+  it("prefers cost-down changes on corrugating paper before reducing liners", () => {
+    const standard = createEligibleEvaluation({
+      id: "standard",
+      costYuan: 2.3,
+      bctN: 500,
+      burstStrength: 125,
+      edgeCrushKnPerM: 5,
+      candidate: createCandidate({
+        id: "standard",
+        outerWeight: 200,
+        corrugatingWeight: 160,
+        innerWeight: 200,
+      }),
+    });
+    const linerReduced = createEligibleEvaluation({
+      id: "liner-reduced",
+      costYuan: 2.05,
+      bctN: 460,
+      burstStrength: 115,
+      edgeCrushKnPerM: 4.6,
+      candidate: createCandidate({
+        id: "liner-reduced",
+        outerWeight: 190,
+        corrugatingWeight: 160,
+        innerWeight: 200,
+      }),
+    });
+    const corrugatingReduced = createEligibleEvaluation({
+      id: "corrugating-reduced",
+      costYuan: 2.1,
+      bctN: 460,
+      burstStrength: 115,
+      edgeCrushKnPerM: 4.6,
+      candidate: createCandidate({
+        id: "corrugating-reduced",
+        outerWeight: 200,
+        corrugatingWeight: 150,
+        innerWeight: 200,
+      }),
+    });
+
+    const result = selectMatchingRecommendations({
+      evaluation: createEvaluationResult({
+        eligibleCandidates: [linerReduced, corrugatingReduced, standard],
+      }),
+      parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec(),
+    });
+
+    expect(result.slots[1]!.evaluation?.candidate.id).toBe("corrugating-reduced");
+  });
+
+  it("prefers standard candidates with closer outer and inner liner weights", () => {
+    const widerLinerGap = createEligibleEvaluation({
+      id: "a-wider-liner-gap",
+      costYuan: 2.2,
+      bctN: 500,
+      burstStrength: 125,
+      edgeCrushKnPerM: 5,
+      candidate: createCandidate({
+        id: "a-wider-liner-gap",
+        outerWeight: 200,
+        innerWeight: 190,
+      }),
+    });
+    const matchedLiners = createEligibleEvaluation({
+      id: "z-matched-liners",
+      costYuan: 2.2,
+      bctN: 500,
+      burstStrength: 125,
+      edgeCrushKnPerM: 5,
+      candidate: createCandidate({
+        id: "z-matched-liners",
+        outerWeight: 200,
+        innerWeight: 200,
+      }),
+    });
+
+    const result = selectMatchingRecommendations({
+      evaluation: createEvaluationResult({
+        eligibleCandidates: [widerLinerGap, matchedLiners],
+      }),
+      parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec(),
+    });
+
+    expect(result.slots[0]!.evaluation?.candidate.id).toBe("z-matched-liners");
+  });
+
+  it("keeps E flute as a light-small-box option instead of a default heavy-duty option", () => {
+    const eFlute = createEligibleEvaluation({
+      id: "e-flute",
+      costYuan: 2.2,
+      bctN: 500,
+      burstStrength: 125,
+      edgeCrushKnPerM: 5,
+      candidate: createCandidate({ id: "e-flute", fluteType: "E" }),
+    });
+    const bFlute = createEligibleEvaluation({
+      id: "b-flute",
+      costYuan: 2.2,
+      bctN: 500,
+      burstStrength: 125,
+      edgeCrushKnPerM: 5,
+      candidate: createCandidate({ id: "b-flute", fluteType: "B" }),
+    });
+
+    const lightSmallResult = selectMatchingRecommendations({
+      evaluation: createEvaluationResult({ eligibleCandidates: [bFlute, eFlute] }),
+      parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec({
+        lengthMm: 250,
+        widthMm: 180,
+        heightMm: 120,
+        productWeightKg: 3,
+      }),
+    });
+    const normalResult = selectMatchingRecommendations({
+      evaluation: createEvaluationResult({ eligibleCandidates: [bFlute, eFlute] }),
+      parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec(),
+    });
+
+    expect(lightSmallResult.slots[0]!.evaluation?.candidate.id).toBe("e-flute");
+    expect(normalResult.slots[0]!.evaluation?.candidate.id).toBe("b-flute");
+  });
+
+  it("does not select rejected candidates for official recommendation slots", () => {
     const eligible = createEligibleEvaluation({ id: "eligible", costYuan: 3, bctN: 600 });
     const rejectedLowCost = createRejectedEvaluation({
       id: "rejected-low-cost",
       costYuan: 1,
       bctN: 600,
     });
-    const rejectedHighSafety = createRejectedEvaluation({
-      id: "rejected-high-safety",
-      costYuan: 3,
-      bctN: 900,
-    });
 
     const result = selectMatchingRecommendations({
       evaluation: createEvaluationResult({
         eligibleCandidates: [eligible],
-        rejectedCandidates: [rejectedLowCost, rejectedHighSafety],
+        rejectedCandidates: [rejectedLowCost],
       }),
       parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec(),
     });
 
-    expect(result.slots[0].evaluation?.candidate.id).not.toBe("rejected-low-cost");
-    expect(result.slots[1].evaluation?.candidate.id).not.toBe("rejected-high-safety");
-  });
-
-  it("attaches historical habit info to selected historical candidates", () => {
-    const historical = createEligibleEvaluation({ id: "historical", costYuan: 2.3, bctN: 640 });
-    const defaultCandidate = createEligibleEvaluation({
-      id: "default-candidate",
-      costYuan: 2.1,
-      bctN: 640,
-    });
-
-    const result = selectMatchingRecommendations({
-      evaluation: createEvaluationResult({
-        eligibleCandidates: [defaultCandidate, historical],
-      }),
-      parameters: DEFAULT_CALCULATION_PARAMETERS,
-      historicalHabitContext: createHistoricalSelectionContext([historical]),
-    });
-
-    expect(result.slots[0].evaluation?.candidate.id).toBe("historical");
-    expect(result.slots[0].historicalHabit?.label).toBe("高匹配");
-  });
-
-  it("does not select rejected historical candidates as official recommendations", () => {
-    const eligibleDefault = createEligibleEvaluation({
-      id: "eligible-default",
-      costYuan: 2.3,
-      bctN: 640,
-    });
-    const rejectedHistorical = createRejectedEvaluation({
-      id: "rejected-historical",
-      costYuan: 2.1,
-      bctN: 760,
-    });
-
-    const result = selectMatchingRecommendations({
-      evaluation: createEvaluationResult({
-        eligibleCandidates: [eligibleDefault],
-        rejectedCandidates: [rejectedHistorical],
-      }),
-      parameters: DEFAULT_CALCULATION_PARAMETERS,
-      historicalHabitContext: createHistoricalSelectionContextFromCandidates([
-        rejectedHistorical.candidate,
-      ]),
-    });
-
-    expect(result.slots.every((slot) => slot.evaluation?.candidate.id !== "rejected-historical")).toBe(
-      true,
-    );
     expect(result.slots.every((slot) => slot.evaluation?.status !== "rejected")).toBe(true);
-  });
-
-  it("does not include historical habit or AI generated fields", () => {
-    const economy = createEligibleEvaluation({ id: "economy", costYuan: 2.1, bctN: 520 });
-    const safety = createEligibleEvaluation({ id: "safety", costYuan: 2.5, bctN: 760 });
-    const balanced = createEligibleEvaluation({ id: "balanced", costYuan: 2.3, bctN: 640 });
-
-    const result = selectMatchingRecommendations({
-      evaluation: createEvaluationResult({
-        eligibleCandidates: [economy, safety, balanced],
-      }),
-      parameters: DEFAULT_CALCULATION_PARAMETERS,
-    });
-
-    const serializedResult = JSON.stringify(result);
-
-    expect(serializedResult).not.toContain("historicalHabitScore");
-    expect(serializedResult).not.toContain("historicalReason");
-    expect(serializedResult).not.toContain("aiReason");
-    expect(serializedResult).not.toContain("aiGeneratedReason");
-  });
-
-  it("uses the next different safety candidate when the best safety candidate is already used", () => {
-    const economyAndSafety = createEligibleEvaluation({
-      id: "economy-and-safety",
-      costYuan: 2,
-      bctN: 760,
-    });
-    const safetyFallback = createEligibleEvaluation({
-      id: "safety-fallback",
-      costYuan: 2.2,
-      bctN: 680,
-    });
-    const balanced = createEligibleEvaluation({ id: "balanced", costYuan: 2.3, bctN: 640 });
-
-    const result = selectMatchingRecommendations({
-      evaluation: createEvaluationResult({
-        eligibleCandidates: [economyAndSafety, safetyFallback, balanced],
-      }),
-      parameters: DEFAULT_CALCULATION_PARAMETERS,
-    });
-
-    expect(result.slots[1].evaluation?.candidate.id).toBe("safety-fallback");
-    expect(result.slots[1].status).toBe("recommended");
-  });
-
-  it("marks repeated slots when only one eligible candidate can fill all strategies", () => {
-    const onlyCandidate = createEligibleEvaluation({ id: "only-candidate", costYuan: 2, bctN: 640 });
-
-    const result = selectMatchingRecommendations({
-      evaluation: createEvaluationResult({
-        eligibleCandidates: [onlyCandidate],
-      }),
-      parameters: DEFAULT_CALCULATION_PARAMETERS,
-    });
-
-    expect(result.slots.map((slot) => slot.evaluation?.candidate.id)).toEqual([
-      "only-candidate",
-      "only-candidate",
-      "only-candidate",
-    ]);
-    expect(result.slots.map((slot) => slot.status)).toEqual([
-      "recommended",
-      "repeated",
-      "repeated",
-    ]);
-    expect(result.slots[1].messages).toContain("该组合同时也是某策略下最优");
-  });
-
-  it("returns an unavailable safety slot when every eligible candidate exceeds the safety surplus cap", () => {
-    const overLimit = createEligibleEvaluation({ id: "over-limit", costYuan: 2, bctN: 820 });
-
-    const result = selectMatchingRecommendations({
-      evaluation: createEvaluationResult({
-        eligibleCandidates: [overLimit],
-      }),
-      parameters: DEFAULT_CALCULATION_PARAMETERS,
-    });
-
-    expect(result.slots[1].status).toBe("unavailable");
-    expect(result.slots[1].isOfficialRecommendation).toBe(false);
-    expect(result.slots[1].evaluation).toBeUndefined();
-    expect(result.slots[1].unavailableReasons.map((reason) => reason.message)).toContain(
-      "所有安全型候选抗压富余率超过 200% 上限",
-    );
-  });
-
-  it("keeps three slots when only two different eligible candidates exist", () => {
-    const lowCost = createEligibleEvaluation({ id: "low-cost", costYuan: 2, bctN: 640 });
-    const highSafety = createEligibleEvaluation({ id: "high-safety", costYuan: 2.5, bctN: 760 });
-
-    const result = selectMatchingRecommendations({
-      evaluation: createEvaluationResult({
-        eligibleCandidates: [lowCost, highSafety],
-      }),
-      parameters: DEFAULT_CALCULATION_PARAMETERS,
-    });
-
-    expect(result.slots).toHaveLength(3);
-    expect(result.slots[2].status).toBe("repeated");
-    expect(result.slots[2].messages).toContain("该组合同时也是某策略下最优");
   });
 
   it("returns reference slots and the global reference message when no eligible candidate exists", () => {
     const lowerCost = createRejectedEvaluation({ id: "lower-cost", costYuan: 2.1, bctN: 600 });
-    const higherSafety = createRejectedEvaluation({ id: "higher-safety", costYuan: 2.3, bctN: 800 });
+    const higherStrength = createRejectedEvaluation({
+      id: "higher-strength",
+      costYuan: 2.3,
+      bctN: 800,
+    });
 
     const result = selectMatchingRecommendations({
       evaluation: createEvaluationResult({
         eligibleCandidates: [],
-        rejectedCandidates: [higherSafety, lowerCost],
+        rejectedCandidates: [higherStrength, lowerCost],
       }),
       parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec(),
     });
 
-    expect(result.slots).toHaveLength(3);
+    expect(result.slots).toHaveLength(2);
     expect(result.slots.some((slot) => slot.status === "reference")).toBe(true);
     expect(result.globalMessages).toContain("当前没有达标可生产方案，以下仅供调整参考");
-    expect(result.slots[0].evaluation?.candidate.id).toBe("lower-cost");
-    expect(result.slots[1].evaluation?.candidate.id).toBe("higher-safety");
+    expect(result.slots[0]!.evaluation?.candidate.id).toBe("higher-strength");
+    expect(result.slots[1]!.evaluation?.candidate.id).toBe("lower-cost");
     expect(result.slots.every((slot) => slot.isOfficialRecommendation === false)).toBe(true);
   });
 
-  it("selects the balanced reference candidate with the fewest reasons when cost and strength exist", () => {
-    const oneReason = createRejectedEvaluation({ id: "one-reason", costYuan: 2.5, bctN: 600 });
-    const twoReasons = createRejectedEvaluation({
-      id: "two-reasons",
-      costYuan: 2.1,
-      bctN: 800,
-      reasons: [
-        {
-          type: "STRENGTH_UNQUALIFIED",
-          code: "BCT_TOO_LOW",
-          message: "空箱抗压不足",
-        },
-        {
-          type: "NOT_MANUFACTURABLE",
-          code: "BOARD_WIDTH_TOO_LARGE",
-          message: "纸板宽超过设备限制",
-        },
-      ],
-    });
-
-    const result = selectMatchingRecommendations({
-      evaluation: createEvaluationResult({
-        eligibleCandidates: [],
-        rejectedCandidates: [twoReasons, oneReason],
-      }),
-      parameters: DEFAULT_CALCULATION_PARAMETERS,
-    });
-
-    expect(result.slots[2].evaluation?.candidate.id).toBe("one-reason");
-  });
-
-  it("keeps strength and device reasons visible on reference slots", () => {
-    const strengthRejected = createRejectedEvaluation({
-      id: "strength-rejected",
-      costYuan: 2.1,
-      bctN: 600,
-      reasons: [
-        {
-          type: "STRENGTH_UNQUALIFIED",
-          code: "ECT_TOO_LOW",
-          message: "边压不足",
-        },
-      ],
-    });
-    const deviceRejected = createRejectedEvaluation({
-      id: "device-rejected",
+  it("returns three reference slots when no special-order candidate is eligible", () => {
+    const lowerCost = createRejectedEvaluation({ id: "lower-cost", costYuan: 2.1, bctN: 600 });
+    const higherStrength = createRejectedEvaluation({
+      id: "higher-strength",
       costYuan: 2.3,
       bctN: 800,
-      reasons: [
-        {
-          type: "NOT_MANUFACTURABLE",
-          code: "BOARD_WIDTH_TOO_LARGE",
-          message: "纸板宽超过设备限制",
-        },
-      ],
     });
 
     const result = selectMatchingRecommendations({
       evaluation: createEvaluationResult({
         eligibleCandidates: [],
-        rejectedCandidates: [strengthRejected, deviceRejected],
+        rejectedCandidates: [higherStrength, lowerCost],
       }),
       parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec({
+        specialRequirements: {
+          dieCutting: true,
+          punctureStrengthRequired: false,
+        },
+      }),
     });
 
-    const visibleReasons = result.slots.flatMap((slot) =>
-      slot.unavailableReasons.map((reason) => reason.message),
-    );
-
-    expect(visibleReasons).toContain("边压不足");
-    expect(visibleReasons).toContain("纸板宽超过设备限制");
+    expect(result.slots.map((slot) => slot.strategy)).toEqual([
+      "standard",
+      "cost_down",
+      "enhanced",
+    ]);
   });
 
   it("returns unavailable slots when rejected candidates have no displayable calculation result", () => {
@@ -533,42 +597,36 @@ describe("selectMatchingRecommendations", () => {
         rejectedCandidates: [createRejectedWithoutDisplayData("missing-data")],
       }),
       parameters: DEFAULT_CALCULATION_PARAMETERS,
+      boxSpec: createBoxSpec(),
     });
 
-    expect(result.slots.map((slot) => slot.status)).toEqual([
-      "unavailable",
-      "unavailable",
-      "unavailable",
-    ]);
+    expect(result.slots.map((slot) => slot.status)).toEqual(["unavailable", "unavailable"]);
     expect(result.slots.every((slot) => slot.isOfficialRecommendation === false)).toBe(true);
-    expect(result.slots[0].unavailableReasons.map((reason) => reason.message)).toContain(
+    expect(result.slots[0]!.unavailableReasons.map((reason) => reason.message)).toContain(
       "没有可展示的参考方案",
     );
   });
 });
 
-function createHistoricalSelectionContext(evaluations: EligibleCandidateEvaluation[]) {
-  return createHistoricalSelectionContextFromCandidates(
-    evaluations.map((evaluation) => evaluation.candidate),
-  );
-}
-
-function createHistoricalSelectionContextFromCandidates(candidates: MatchingCandidate[]) {
-  const historicalHabitByCandidateFingerprint: Record<string, RecommendationHistoricalHabitInfo> = {};
-
-  for (const candidate of candidates) {
-    historicalHabitByCandidateFingerprint[createMatchingCandidateFingerprint(candidate)] = {
-      level: "high",
-      label: "高匹配",
-      reasons: ["相似历史订单中该组合常用"],
-      evidences: [],
-      conflictMessages: [],
-    };
-  }
-
+function createBoxSpec(overrides: Partial<NormalizedBoxSpec> = {}): NormalizedBoxSpec {
   return {
-    status: "available" as const,
-    historicalHabitByCandidateFingerprint,
-    globalMessages: [],
+    lengthMm: 300,
+    widthMm: 200,
+    heightMm: 150,
+    structureType: "0201",
+    formingMethod: "glue",
+    productType: PRODUCT_TYPES[0]!,
+    productWeightKg: 10,
+    arrangement: "single_row",
+    specialRequirements: {
+      dieCutting: false,
+      punctureStrengthRequired: false,
+    },
+    productionQuantity: 1_000,
+    stackingRequirement: {
+      status: "not_required",
+      displayText: "未填写堆码层数，承重未校核",
+    },
+    ...overrides,
   };
 }

@@ -15,6 +15,10 @@ function createBoxSpec(overrides: Partial<NormalizedBoxSpec> = {}): NormalizedBo
     productType: "食品",
     productWeightKg: 10,
     arrangement: "single_row",
+    specialRequirements: {
+      dieCutting: false,
+      punctureStrengthRequired: false,
+    },
     productionQuantity: 100,
     stackingRequirement: {
       status: "not_required",

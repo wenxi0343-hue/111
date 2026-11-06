@@ -1,10 +1,7 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { loadAuthConfig } from "@/modules/auth/config";
-import { AUTH_SESSION_COOKIE_NAME, verifySessionValue } from "@/modules/auth/session";
+import { readAuthenticatedUser } from "@/server/guards/auth";
 
 import { LogoutButton } from "./_components/logout-button";
 
@@ -12,64 +9,36 @@ interface MainLayoutProps {
   children: ReactNode;
 }
 
-type MainLayoutAuthStatus = "authenticated" | "required" | "expired";
-
-const navItems = [
-  { href: "/dashboard", label: "工作台" },
-  { href: "/matching", label: "配纸" },
-  { href: "/master-data", label: "数据维护" },
-  { href: "/history", label: "历史方案" },
-  { href: "/settings", label: "设置" },
-];
-
-async function getMainLayoutAuthStatus(): Promise<MainLayoutAuthStatus> {
-  const configResult = loadAuthConfig();
-
-  if (!configResult.ok) {
-    return "required";
-  }
-
-  const cookieStore = await cookies();
-  const sessionValue = cookieStore.get(AUTH_SESSION_COOKIE_NAME)?.value;
-  const sessionResult = verifySessionValue({
-    sessionValue,
-    sessionSecret: configResult.data.sessionSecret,
-  });
-
-  if (sessionResult.ok) {
-    return "authenticated";
-  }
-
-  return sessionResult.error.code === "SESSION_EXPIRED" ? "expired" : "required";
-}
-
 export default async function MainLayout({ children }: MainLayoutProps) {
-  const authStatus = await getMainLayoutAuthStatus();
-
-  if (authStatus === "expired") {
-    redirect("/login?reason=expired");
-  }
-
-  if (authStatus === "required") {
-    redirect("/login");
-  }
+  const user = await readAuthenticatedUser();
 
   return (
     <div className="app-shell">
-      <aside className="app-sidebar">
-        <div className="app-title">纸箱自动配纸工具</div>
-        <nav className="app-nav">
-          {navItems.map((item) => (
-            <Link key={item.href} href={item.href}>
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="app-sidebar-footer">
-          <LogoutButton />
+      <header className="app-topbar">
+        <div className="app-brand">
+          <strong>纸箱自动配纸工具</strong>
+          <span>单次配纸</span>
         </div>
-      </aside>
+        <div className="app-session">
+          <span>{user ? "已登录" : "未登录"}</span>
+          {user ? <LogoutButton /> : null}
+        </div>
+      </header>
       <main className="app-main">{children}</main>
+      <nav className="app-tabbar" aria-label="底部模块导航">
+        <Link href="/matching" aria-label="配纸">
+          <span aria-hidden="true">▦</span>
+          <strong>配纸</strong>
+        </Link>
+        <Link href="/history" aria-label="历史方案">
+          <span aria-hidden="true">▤</span>
+          <strong>历史方案</strong>
+        </Link>
+        <Link href="/review-orders" aria-label="评审工单">
+          <span aria-hidden="true">▦</span>
+          <strong>评审工单</strong>
+        </Link>
+      </nav>
     </div>
   );
 }

@@ -1,24 +1,22 @@
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_CALCULATION_PARAMETERS } from "@/modules/calculations/default-parameters";
+import { PRODUCT_TYPES } from "@/modules/box-spec/constants";
 import type {
   BoardAreaResult,
   CandidateLayer,
   CostResult,
   DeviceLimitResult,
   EligibleCandidateEvaluation,
+  FluteType,
   MatchingCandidate,
   StrengthResult,
 } from "@/modules/calculations/types";
+import type { NormalizedBoxSpec } from "@/modules/box-spec/types";
 import {
-  calculateSafetySurplusRate,
   createCandidateFingerprint,
-  createMatchingCandidateFingerprint,
-  scoreBalancedCandidates,
-  sortCandidatesByEconomy,
-  sortCandidatesBySafety,
+  sortCandidatesByStandard,
 } from "@/modules/recommendation/scoring";
-import type { RecommendationHistoricalHabitInfo } from "@/modules/recommendation/types";
 
 function createLayer(overrides: Partial<CandidateLayer>): CandidateLayer {
   return {
@@ -35,11 +33,20 @@ function createLayer(overrides: Partial<CandidateLayer>): CandidateLayer {
   };
 }
 
-function createCandidate(id: string, paperIdPrefix = id): MatchingCandidate {
+function createCandidate(
+  id: string,
+  paperIdPrefix = id,
+  options: {
+    corrugatingGramWeightGsm?: number;
+    fluteType?: Extract<FluteType, "A" | "B" | "C" | "E">;
+  } = {},
+): MatchingCandidate {
+  const fluteType = options.fluteType ?? "B";
+
   return {
     id,
     layerCount: 3,
-    fluteType: "B",
+    fluteType,
     layers: [
       createLayer({
         role: "outer_liner",
@@ -54,11 +61,11 @@ function createCandidate(id: string, paperIdPrefix = id): MatchingCandidate {
       }),
       createLayer({
         role: "corrugating",
-        flute: "B",
+        flute: fluteType,
         paper: {
           id: `${paperIdPrefix}-corrugating`,
           paperCode: `${paperIdPrefix}-W1`,
-          gramWeightGsm: 160,
+          gramWeightGsm: options.corrugatingGramWeightGsm ?? 160,
           priceYuanPerTon: 2800,
           burstIndex: 10,
           ringCrushIndex: 20,
@@ -79,24 +86,106 @@ function createCandidate(id: string, paperIdPrefix = id): MatchingCandidate {
   };
 }
 
+function createFiveLayerCandidate(
+  id: string,
+  fluteType: Extract<FluteType, "BC" | "BE">,
+  options: {
+    outerWeightGsm?: number;
+    firstCorrugatingWeightGsm?: number;
+    mediumWeightGsm?: number;
+    secondCorrugatingWeightGsm?: number;
+    innerWeightGsm?: number;
+  } = {},
+): MatchingCandidate {
+  const [firstFlute, secondFlute] = fluteType.split("") as ["B", "C" | "E"];
+
+  return {
+    id,
+    layerCount: 5,
+    fluteType,
+    layers: [
+      createLayer({
+        role: "outer_liner",
+        paper: {
+          id: `${id}-outer`,
+          paperCode: `${id}-P1`,
+          gramWeightGsm: options.outerWeightGsm ?? 200,
+          priceYuanPerTon: 3000,
+          burstIndex: 10,
+          ringCrushIndex: 20,
+        },
+      }),
+      createLayer({
+        role: "corrugating",
+        flute: firstFlute,
+        paper: {
+          id: `${id}-corrugating-1`,
+          paperCode: `${id}-W1`,
+          gramWeightGsm: options.firstCorrugatingWeightGsm ?? 160,
+          priceYuanPerTon: 2800,
+          burstIndex: 10,
+          ringCrushIndex: 20,
+        },
+      }),
+      createLayer({
+        role: "medium",
+        paper: {
+          id: `${id}-medium`,
+          paperCode: `${id}-M1`,
+          gramWeightGsm: options.mediumWeightGsm ?? 140,
+          priceYuanPerTon: 2800,
+          burstIndex: 10,
+          ringCrushIndex: 20,
+        },
+      }),
+      createLayer({
+        role: "corrugating",
+        flute: secondFlute,
+        paper: {
+          id: `${id}-corrugating-2`,
+          paperCode: `${id}-W2`,
+          gramWeightGsm: options.secondCorrugatingWeightGsm ?? 160,
+          priceYuanPerTon: 2800,
+          burstIndex: 10,
+          ringCrushIndex: 20,
+        },
+      }),
+      createLayer({
+        role: "inner_liner",
+        paper: {
+          id: `${id}-inner`,
+          paperCode: `${id}-P2`,
+          gramWeightGsm: options.innerWeightGsm ?? 200,
+          priceYuanPerTon: 3000,
+          burstIndex: 10,
+          ringCrushIndex: 20,
+        },
+      }),
+    ],
+  };
+}
+
 function createEligibleEvaluation(input: {
   id: string;
   costYuan: number;
   bctN: number;
+  burstStrength?: number;
+  edgeCrushKnPerM?: number;
   paperIdPrefix?: string;
+  candidate?: MatchingCandidate;
 }): EligibleCandidateEvaluation {
   return {
     status: "eligible",
-    candidate: createCandidate(input.id, input.paperIdPrefix),
+    candidate: input.candidate ?? createCandidate(input.id, input.paperIdPrefix),
     area: {} as BoardAreaResult,
     device: {
       isManufacturable: true,
       reasons: [],
     } satisfies DeviceLimitResult,
     strength: {
-      burstStrength: 3800,
-      edgeCrushNPerM: 4500,
-      edgeCrushKnPerM: 4.5,
+      burstStrength: input.burstStrength ?? 3800,
+      edgeCrushNPerM: (input.edgeCrushKnPerM ?? 4.5) * 1000,
+      edgeCrushKnPerM: input.edgeCrushKnPerM ?? 4.5,
       bctN: input.bctN,
       isQualified: true,
       reasons: [],
@@ -131,200 +220,314 @@ describe("recommendation scoring", () => {
     expect(createCandidateFingerprint(first)).toBe(createCandidateFingerprint(second));
   });
 
-  it("sorts economy candidates by lower tax-included cost first", () => {
-    const lowerCost = createEligibleEvaluation({ id: "lower-cost", costYuan: 2.1, bctN: 600 });
-    const higherCost = createEligibleEvaluation({ id: "higher-cost", costYuan: 2.3, bctN: 600 });
-
-    const sorted = sortCandidatesByEconomy([higherCost, lowerCost], DEFAULT_CALCULATION_PARAMETERS);
-
-    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
-      "lower-cost",
-      "higher-cost",
-    ]);
-  });
-
-  it("sorts economy candidates inside historical matches before lower cost defaults", () => {
-    const historical = createEligibleEvaluation({ id: "historical", costYuan: 2.3, bctN: 600 });
-    const lowerCostDefault = createEligibleEvaluation({
-      id: "lower-cost-default",
-      costYuan: 2.1,
-      bctN: 600,
+  it("keeps BC before BE for normal five-layer standard candidates even when BE is closer to the surplus target", () => {
+    const primaryFlute = createEligibleEvaluation({
+      id: "primary-bc-flute",
+      costYuan: 3.2,
+      bctN: 880,
+      burstStrength: 220,
+      edgeCrushKnPerM: 7.7,
+      candidate: createFiveLayerCandidate("primary-bc-flute", "BC"),
+    });
+    const secondaryFluteCloserToTarget = createEligibleEvaluation({
+      id: "secondary-be-flute",
+      costYuan: 3,
+      bctN: 1040,
+      burstStrength: 260,
+      edgeCrushKnPerM: 9.1,
+      candidate: createFiveLayerCandidate("secondary-be-flute", "BE"),
     });
 
-    const sorted = sortCandidatesByEconomy(
-      [lowerCostDefault, historical],
-      DEFAULT_CALCULATION_PARAMETERS,
-      createHistoricalSelectionContext([historical]),
-    );
-
-    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
-      "historical",
-      "lower-cost-default",
-    ]);
-  });
-
-  it("uses lower safety surplus as the economy tie breaker when costs are equal", () => {
-    const lowerSurplus = createEligibleEvaluation({ id: "lower-surplus", costYuan: 2.1, bctN: 440 });
-    const higherSurplus = createEligibleEvaluation({
-      id: "higher-surplus",
-      costYuan: 2.1,
-      bctN: 720,
-    });
-
-    const sorted = sortCandidatesByEconomy(
-      [higherSurplus, lowerSurplus],
-      DEFAULT_CALCULATION_PARAMETERS,
-    );
-
-    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
-      "lower-surplus",
-      "higher-surplus",
-    ]);
-  });
-
-  it("calculates safety surplus from BCT and layer threshold", () => {
-    const evaluation = createEligibleEvaluation({ id: "strong", costYuan: 2.1, bctN: 1200 });
-
-    expect(calculateSafetySurplusRate(evaluation, DEFAULT_CALCULATION_PARAMETERS)).toBe(3);
-  });
-
-  it("sorts safety candidates by higher surplus and filters candidates over 200%", () => {
-    const medium = createEligibleEvaluation({ id: "medium", costYuan: 2.1, bctN: 600 });
-    const high = createEligibleEvaluation({ id: "high", costYuan: 2.2, bctN: 720 });
-    const overLimit = createEligibleEvaluation({ id: "over-limit", costYuan: 2.0, bctN: 804 });
-
-    const sorted = sortCandidatesBySafety(
-      [medium, overLimit, high],
-      DEFAULT_CALCULATION_PARAMETERS,
-    );
-
-    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual(["high", "medium"]);
-  });
-
-  it("sorts safety candidates inside historical matches before higher surplus defaults", () => {
-    const historical = createEligibleEvaluation({ id: "historical", costYuan: 2.3, bctN: 600 });
-    const higherSurplusDefault = createEligibleEvaluation({
-      id: "higher-surplus-default",
-      costYuan: 2.1,
-      bctN: 760,
-    });
-
-    const sorted = sortCandidatesBySafety(
-      [higherSurplusDefault, historical],
+    const sorted = sortCandidatesByStandard(
+      [secondaryFluteCloserToTarget, primaryFlute],
       DEFAULT_CALCULATION_PARAMETERS,
       {},
-      createHistoricalSelectionContext([historical]),
+      createBoxSpec(),
     );
 
     expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
-      "historical",
-      "higher-surplus-default",
+      "primary-bc-flute",
+      "secondary-be-flute",
     ]);
   });
 
-  it("uses default 50/50 weights for balanced scoring", () => {
-    const lowCost = createEligibleEvaluation({ id: "low-cost", costYuan: 2, bctN: 400 });
-    const highSafety = createEligibleEvaluation({ id: "high-safety", costYuan: 4, bctN: 800 });
-
-    const scores = scoreBalancedCandidates(
-      [lowCost, highSafety],
-      DEFAULT_CALCULATION_PARAMETERS,
-    );
-
-    expect(scores.map((score) => score.balancedScore)).toEqual([0.5, 0.5]);
-  });
-
-  it("uses historical 40%, cost 30%, and safety 30% when historical context is provided", () => {
-    const highHistory = createEligibleEvaluation({ id: "high-history", costYuan: 3, bctN: 600 });
-    const lowHistoryLowCost = createEligibleEvaluation({
-      id: "low-history-low-cost",
-      costYuan: 2,
-      bctN: 600,
+  it("keeps practical five-layer liner weights before overbuilt standard candidates", () => {
+    const practical = createEligibleEvaluation({
+      id: "practical-bc",
+      costYuan: 3.2,
+      bctN: 880,
+      burstStrength: 220,
+      edgeCrushKnPerM: 7.7,
+      candidate: createFiveLayerCandidate("practical-bc", "BC", {
+        outerWeightGsm: 200,
+        firstCorrugatingWeightGsm: 105,
+        mediumWeightGsm: 105,
+        secondCorrugatingWeightGsm: 140,
+        innerWeightGsm: 180,
+      }),
+    });
+    const overbuiltCloserToTarget = createEligibleEvaluation({
+      id: "overbuilt-bc",
+      costYuan: 3,
+      bctN: 1040,
+      burstStrength: 260,
+      edgeCrushKnPerM: 9.1,
+      candidate: createFiveLayerCandidate("overbuilt-bc", "BC", {
+        outerWeightGsm: 360,
+        firstCorrugatingWeightGsm: 220,
+        mediumWeightGsm: 100,
+        secondCorrugatingWeightGsm: 220,
+        innerWeightGsm: 360,
+      }),
     });
 
-    const scores = scoreBalancedCandidates(
-      [highHistory, lowHistoryLowCost],
+    const sorted = sortCandidatesByStandard(
+      [overbuiltCloserToTarget, practical],
       DEFAULT_CALCULATION_PARAMETERS,
       {},
-      createHistoricalSelectionContext([highHistory], { low: [lowHistoryLowCost] }),
+      createBoxSpec(),
     );
 
-    expect(
-      scores.find((score) => score.evaluation.candidate.id === "high-history")?.balancedScore,
-    ).toBeGreaterThan(
-      scores.find((score) => score.evaluation.candidate.id === "low-history-low-cost")
-        ?.balancedScore ?? 0,
-    );
+    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
+      "practical-bc",
+      "overbuilt-bc",
+    ]);
   });
 
-  it("uses full cost score when all candidate costs are equal", () => {
-    const first = createEligibleEvaluation({ id: "first", costYuan: 2.1, bctN: 400 });
-    const second = createEligibleEvaluation({ id: "second", costYuan: 2.1, bctN: 800 });
+  it("prefers common five-layer BC total gram weight over heavier ordinary candidates", () => {
+    const commonTotal = createEligibleEvaluation({
+      id: "common-total-bc",
+      costYuan: 3.4,
+      bctN: 900,
+      burstStrength: 230,
+      edgeCrushKnPerM: 8,
+      candidate: createFiveLayerCandidate("common-total-bc", "BC", {
+        outerWeightGsm: 200,
+        firstCorrugatingWeightGsm: 120,
+        mediumWeightGsm: 105,
+        secondCorrugatingWeightGsm: 120,
+        innerWeightGsm: 190,
+      }),
+    });
+    const heavierOrdinary = createEligibleEvaluation({
+      id: "heavier-ordinary-bc",
+      costYuan: 3.1,
+      bctN: 900,
+      burstStrength: 230,
+      edgeCrushKnPerM: 8,
+      candidate: createFiveLayerCandidate("heavier-ordinary-bc", "BC", {
+        outerWeightGsm: 250,
+        firstCorrugatingWeightGsm: 150,
+        mediumWeightGsm: 300,
+        secondCorrugatingWeightGsm: 150,
+        innerWeightGsm: 240,
+      }),
+    });
 
-    const scores = scoreBalancedCandidates([first, second], DEFAULT_CALCULATION_PARAMETERS);
-
-    expect(scores.map((score) => score.costScore)).toEqual([1, 1]);
-    expect(scores.every((score) => Number.isFinite(score.balancedScore))).toBe(true);
-  });
-
-  it("uses full safety score when all candidate surplus rates are equal", () => {
-    const first = createEligibleEvaluation({ id: "first", costYuan: 2.1, bctN: 600 });
-    const second = createEligibleEvaluation({ id: "second", costYuan: 2.5, bctN: 600 });
-
-    const scores = scoreBalancedCandidates([first, second], DEFAULT_CALCULATION_PARAMETERS);
-
-    expect(scores.map((score) => score.safetyScore)).toEqual([1, 1]);
-    expect(scores.every((score) => Number.isFinite(score.balancedScore))).toBe(true);
-  });
-
-  it("caps balanced safety scoring at 200% surplus", () => {
-    const baseline = createEligibleEvaluation({ id: "baseline", costYuan: 2.1, bctN: 400 });
-    const capped = createEligibleEvaluation({ id: "capped", costYuan: 2.1, bctN: 1200 });
-    const exactlyLimit = createEligibleEvaluation({ id: "exactly-limit", costYuan: 2.1, bctN: 800 });
-
-    const scores = scoreBalancedCandidates(
-      [baseline, capped, exactlyLimit],
+    const sorted = sortCandidatesByStandard(
+      [heavierOrdinary, commonTotal],
       DEFAULT_CALCULATION_PARAMETERS,
+      {},
+      createBoxSpec(),
     );
 
-    expect(scores.find((score) => score.evaluation.candidate.id === "capped")?.safetyScore).toBe(
-      scores.find((score) => score.evaluation.candidate.id === "exactly-limit")?.safetyScore,
+    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
+      "common-total-bc",
+      "heavier-ordinary-bc",
+    ]);
+  });
+
+  it("does not prefer 300g five-layer BC liners over a common total gram weight candidate", () => {
+    const commonTotal = createEligibleEvaluation({
+      id: "common-total-bc",
+      costYuan: 3.4,
+      bctN: 900,
+      burstStrength: 230,
+      edgeCrushKnPerM: 8,
+      candidate: createFiveLayerCandidate("common-total-bc", "BC", {
+        outerWeightGsm: 250,
+        firstCorrugatingWeightGsm: 140,
+        mediumWeightGsm: 100,
+        secondCorrugatingWeightGsm: 140,
+        innerWeightGsm: 250,
+      }),
+    });
+    const overbuiltLiners = createEligibleEvaluation({
+      id: "overbuilt-300g-bc",
+      costYuan: 3.1,
+      bctN: 900,
+      burstStrength: 230,
+      edgeCrushKnPerM: 8,
+      candidate: createFiveLayerCandidate("overbuilt-300g-bc", "BC", {
+        outerWeightGsm: 300,
+        firstCorrugatingWeightGsm: 180,
+        mediumWeightGsm: 100,
+        secondCorrugatingWeightGsm: 180,
+        innerWeightGsm: 300,
+      }),
+    });
+
+    const sorted = sortCandidatesByStandard(
+      [overbuiltLiners, commonTotal],
+      DEFAULT_CALCULATION_PARAMETERS,
+      {},
+      createBoxSpec(),
     );
+
+    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
+      "common-total-bc",
+      "overbuilt-300g-bc",
+    ]);
+  });
+
+  it("does not prefer low total gram weight when corrugating paper is heavier than liners", () => {
+    const practical = createEligibleEvaluation({
+      id: "practical-bc",
+      costYuan: 3.4,
+      bctN: 900,
+      burstStrength: 230,
+      edgeCrushKnPerM: 8,
+      candidate: createFiveLayerCandidate("practical-bc", "BC", {
+        outerWeightGsm: 250,
+        firstCorrugatingWeightGsm: 140,
+        mediumWeightGsm: 100,
+        secondCorrugatingWeightGsm: 140,
+        innerWeightGsm: 250,
+      }),
+    });
+    const invalidLowTotal = createEligibleEvaluation({
+      id: "invalid-low-total-bc",
+      costYuan: 3.1,
+      bctN: 900,
+      burstStrength: 230,
+      edgeCrushKnPerM: 8,
+      candidate: createFiveLayerCandidate("invalid-low-total-bc", "BC", {
+        outerWeightGsm: 135,
+        firstCorrugatingWeightGsm: 180,
+        mediumWeightGsm: 100,
+        secondCorrugatingWeightGsm: 160,
+        innerWeightGsm: 135,
+      }),
+    });
+
+    const sorted = sortCandidatesByStandard(
+      [invalidLowTotal, practical],
+      DEFAULT_CALCULATION_PARAMETERS,
+      {},
+      createBoxSpec(),
+    );
+
+    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
+      "practical-bc",
+      "invalid-low-total-bc",
+    ]);
+  });
+
+  it("does not prefer 150g liners for a 25kg ordinary five-layer BC box", () => {
+    const commonLiner = createEligibleEvaluation({
+      id: "common-liner-bc",
+      costYuan: 3.4,
+      bctN: 900,
+      burstStrength: 230,
+      edgeCrushKnPerM: 8,
+      candidate: createFiveLayerCandidate("common-liner-bc", "BC", {
+        outerWeightGsm: 160,
+        firstCorrugatingWeightGsm: 140,
+        mediumWeightGsm: 100,
+        secondCorrugatingWeightGsm: 140,
+        innerWeightGsm: 160,
+      }),
+    });
+    const lightLiner = createEligibleEvaluation({
+      id: "light-150g-liner-bc",
+      costYuan: 3.1,
+      bctN: 900,
+      burstStrength: 230,
+      edgeCrushKnPerM: 8,
+      candidate: createFiveLayerCandidate("light-150g-liner-bc", "BC", {
+        outerWeightGsm: 150,
+        firstCorrugatingWeightGsm: 140,
+        mediumWeightGsm: 100,
+        secondCorrugatingWeightGsm: 140,
+        innerWeightGsm: 150,
+      }),
+    });
+
+    const sorted = sortCandidatesByStandard(
+      [lightLiner, commonLiner],
+      DEFAULT_CALCULATION_PARAMETERS,
+      {},
+      createBoxSpec(),
+    );
+
+    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
+      "common-liner-bc",
+      "light-150g-liner-bc",
+    ]);
+  });
+
+  it("prefers 190g liners over 160g backup liners for a 25kg ordinary five-layer BC box", () => {
+    const commonLiner = createEligibleEvaluation({
+      id: "common-190g-liner-bc",
+      costYuan: 3.5,
+      bctN: 900,
+      burstStrength: 230,
+      edgeCrushKnPerM: 8,
+      candidate: createFiveLayerCandidate("common-190g-liner-bc", "BC", {
+        outerWeightGsm: 190,
+        firstCorrugatingWeightGsm: 140,
+        mediumWeightGsm: 100,
+        secondCorrugatingWeightGsm: 140,
+        innerWeightGsm: 190,
+      }),
+    });
+    const backupLiner = createEligibleEvaluation({
+      id: "backup-160g-liner-bc",
+      costYuan: 3.1,
+      bctN: 900,
+      burstStrength: 230,
+      edgeCrushKnPerM: 8,
+      candidate: createFiveLayerCandidate("backup-160g-liner-bc", "BC", {
+        outerWeightGsm: 160,
+        firstCorrugatingWeightGsm: 140,
+        mediumWeightGsm: 100,
+        secondCorrugatingWeightGsm: 140,
+        innerWeightGsm: 160,
+      }),
+    });
+
+    const sorted = sortCandidatesByStandard(
+      [backupLiner, commonLiner],
+      DEFAULT_CALCULATION_PARAMETERS,
+      {},
+      createBoxSpec(),
+    );
+
+    expect(sorted.map((evaluation) => evaluation.candidate.id)).toEqual([
+      "common-190g-liner-bc",
+      "backup-160g-liner-bc",
+    ]);
   });
 });
 
-function createHistoricalSelectionContext(
-  highEvaluations: EligibleCandidateEvaluation[],
-  options: { low?: EligibleCandidateEvaluation[] } = {},
-) {
-  const historicalHabitByCandidateFingerprint: Record<string, RecommendationHistoricalHabitInfo> = {};
-
-  for (const evaluation of highEvaluations) {
-    historicalHabitByCandidateFingerprint[createMatchingCandidateFingerprint(evaluation.candidate)] =
-      createHistoricalInfo("high", "高匹配");
-  }
-
-  for (const evaluation of options.low ?? []) {
-    historicalHabitByCandidateFingerprint[createMatchingCandidateFingerprint(evaluation.candidate)] =
-      createHistoricalInfo("low", "低匹配");
-  }
-
+function createBoxSpec(): NormalizedBoxSpec {
   return {
-    status: "available" as const,
-    historicalHabitByCandidateFingerprint,
-    globalMessages: [],
-  };
-}
-
-function createHistoricalInfo(
-  level: RecommendationHistoricalHabitInfo["level"],
-  label: RecommendationHistoricalHabitInfo["label"],
-): RecommendationHistoricalHabitInfo {
-  return {
-    level,
-    label,
-    reasons: [`${label}理由`],
-    evidences: [],
-    conflictMessages: [],
+    lengthMm: 200,
+    widthMm: 200,
+    heightMm: 200,
+    structureType: "0201",
+    formingMethod: "glue",
+    productType: PRODUCT_TYPES[2]!,
+    productWeightKg: 25,
+    arrangement: "single_row",
+    specialRequirements: {
+      dieCutting: false,
+      punctureStrengthRequired: false,
+    },
+    productionQuantity: 1_000,
+    stackingRequirement: {
+      status: "not_required",
+      displayText: "\u672a\u586b\u5199\u5806\u7801\u5c42\u6570\uff0c\u627f\u91cd\u672a\u6821\u6838",
+    },
   };
 }

@@ -1,0 +1,137 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>跨库对齐 · 单位有效强度成本最优配纸方案</title>
+<style>
+:root{--bg:#f5f7fa;--card:#fff;--ink:#1f2937;--muted:#6b7280;--line:#e5e7eb;
+--ok:#0f9d58;--bad:#d93025;--warn:#f4b400;--b1:#e8f0fe;--b2:#fef7e0;--b3:#fce8e6;}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:24px;margin:0 0 6px}
+h2{font-size:18px;margin:30px 0 10px;padding-left:10px;border-left:4px solid #4285f4}
+.sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left}
+th{background:#f0f4f8;font-weight:600}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+td.ctr{text-align:center}
+.tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600}
+.t-ok{background:var(--b1);color:#1a73e8}
+.t-bad{background:var(--b3);color:var(--bad)}
+.t-warn{background:var(--b2);color:#b06000}
+.kpi{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0}
+.kpi .box{flex:1;min-width:180px;background:#fafbff;border:1px solid var(--line);border-radius:10px;padding:14px}
+.kpi .v{font-size:26px;font-weight:700;color:#1a73e8}
+.kpi .l{font-size:12px;color:var(--muted)}
+.note{background:#fffbe6;border-left:4px solid var(--warn);padding:10px 14px;border-radius:6px;font-size:13px;margin:10px 0}
+.crit{background:#fdecea;border-left:4px solid var(--bad);padding:12px 16px;border-radius:6px;margin:14px 0}
+.ok{background:#e6f4ea;border-left:4px solid var(--ok);padding:12px 16px;border-radius:6px;margin:14px 0}
+ul{margin:8px 0 8px 20px}li{margin:4px 0}
+code{background:#eef;padding:1px 5px;border-radius:4px;font-size:12px}
+.small{font-size:12px;color:var(--muted)}
+</style></head><body><div class="wrap">
+<h1>跨库对齐 · 单位有效强度成本最优配纸方案</h1>
+<div class="sub">面纸200g + B瓦120g 三层箱（200/120/200）｜ 数据：钉钉《2026年原纸检测结果》实测 + 内部《原纸代码表》+ 内部《纸价(1).xlsx·26-5》｜ 生成 2026-10-08</div>
+
+<div class="card">
+<h2 style="margin-top:4px">一、做了什么（对齐接线）</h2>
+<p>把钉钉实测表的 <b>「供货单位 + 品名 + 规格」</b> 与内部 <b>《原纸代码表》</b>（取原纸代码/编码）及 <b>《纸价(1).xlsx》</b>（取26-5单价）按 <b>供应商+等级+克重</b> 三键对齐。供应商名做了别名归一（如「云南庆和→庆和纸业」），价表合并单元格的供应商名向前填充，等级标签（N级/A级/T类/高瓦）归一化匹配。全量结果见 <code>数据/原纸实测_对齐成本主表.csv</code>（51个实测分组）。</p>
+</div>
+
+<h2>二、你的箱子候选（已对齐到内部编码与单价）</h2>
+<table>
+<tr><th>供货单位</th><th>规格</th><th>内部编码</th><th>匹配价种(26-5)</th><th>单价元/吨</th>
+<th>均环压</th><th>环压CV</th><th>均耐破</th><th>耐破CV</th><th>可靠k</th>
+<th>有效环压</th><th>有效耐破</th><th>单位有效强度成本</th><th>达标*</th><th>逐批达标率</th></tr>
+
+    <tr>
+      <td>云南东晟</td><td>A级高瓦纸 120g</td>
+      <td>B04024</td>
+      <td>120-130高瓦</td>
+      <td class="num">2830</td>
+      <td class="num">8.72</td>
+      <td class="num">7.90%</td>
+      <td class="num">0.83</td>
+      <td class="num">24.20%</td>
+      <td class="num">0.88</td>
+      <td class="num">7.67</td>
+      <td class="num">0.73</td>
+      <td class="num">368.83</td>
+      <td class="ctr">否</td>
+      <td class="num">69.20%</td>
+    </tr>
+    <tr>
+      <td>重庆理文</td><td>N级箱板纸 200g</td>
+      <td>B03049</td>
+      <td>200、250N级箱板纸</td>
+      <td class="num">3640</td>
+      <td class="num">11.20</td>
+      <td class="num">8.80%</td>
+      <td class="num">2.38</td>
+      <td class="num">6.60%</td>
+      <td class="num">0.93</td>
+      <td class="num">10.42</td>
+      <td class="num">2.22</td>
+      <td class="num">349.47</td>
+      <td class="ctr">否</td>
+      <td class="num">27.60%</td>
+    </tr>
+    <tr>
+      <td>东莞理文</td><td>N级箱板纸 200g</td>
+      <td>B03049</td>
+      <td>—</td>
+      <td class="num">—</td>
+      <td class="num">10.29</td>
+      <td class="num">0.40%</td>
+      <td class="num">2.25</td>
+      <td class="num">0.20%</td>
+      <td class="num">0.97</td>
+      <td class="num">9.98</td>
+      <td class="num">2.18</td>
+      <td class="num">—</td>
+      <td class="ctr">否</td>
+      <td class="num">0.00%</td>
+    </tr>
+</table>
+<p class="small">* 达标 = 实测均值 × 可靠系数k ≥ 国标合格品地板值(200g:环压10.5/耐破2.25；120g:环压7.7/耐破0.4) × (1+10%安全余量)。逐批达标率 = 各批次个体值(已实测)直接满足上述阈值的占比。</p>
+
+<div class="kpi">
+  <div class="box"><div class="v">1.91</div><div class="l">推荐组合 原纸成本 元/㎡</div></div>
+  <div class="box"><div class="v">2.46</div><div class="l">原贵价默认 元/㎡(俄卡面+鹏森高瓦)</div></div>
+  <div class="box"><div class="v" style="color:#0f9d58">0.55</div><div class="l">每㎡节省 元 (↓22.5%)</div></div>
+</div>
+
+<div class="ok"><b>结论：经实测验证的、同物理指标下的最低成本组合</b><br>
+面纸/里纸 <b>重庆理文 N级箱板纸 200g</b>（编码 B03049，3640元/吨）＋ B瓦 <b>云南东晟 A级高瓦纸 120g</b>（编码 B04024，2830元/吨）。
+相比内部原常用的「俄卡面里(4660)+鹏森高瓦(3750)」，原纸成本约降 <b>22.5%</b>。关键：这个降本不是“盲目换便宜纸”，而是用实测数据<b>确认了它确实达到合格品/一等品物理水平</b>后才成立的。</div>
+
+<div class="crit"><b>⚠ 必须同步做来料质检（这是等级口径救不了、实测数据救得了的关键）</b>
+<ul>
+<li><b>重庆理文 N级箱板 200g</b>：均值环压11.2（介于合格品10.5与一等品12.5之间），但<b>批次波动大——逐批+10%余量达标率仅 27.6%</b>（29批中仅8批稳达合格品+余量）。若不挑批，约七成批次会让面里纸掉到合格品线以下。</li>
+<li><b>云南东晟 A级高瓦 120g</b>：均值已达一等品（环压8.72&gt;8.4，耐破0.83&gt;0.65），但<b>耐破批次波动极大(CV 24%)</b>，逐批+10%余量达标率 69%。</li>
+</ul>
+<b>落地做法</b>：对这两种纸设定入库验收阈值——<code>环压≥11.55 且 耐破≥2.475</code>（200g N级）、<code>环压≥8.47 且 耐破≥0.44</code>（120g A级高瓦），逐批检测、只收达标批。这样每批都是“真达标”，可彻底消除等级口径的盲区。</div>
+
+<div class="note"><b>关于 120g T类箱板纸（云南东晟，8批）</b>：它属于<b>箱板/面里纸类（liner），不是瓦纸</b>，不能当B瓦用；其高环压(均值~10+)只是说明该供应商120g产品线本身强度不弱，但结构上B瓦必须用瓦楞原纸，故本方案B瓦仍选 A级高瓦。东莞理文 N级箱板200g 在内部价表无记录（代理/外部来源），且无内部编码价，暂不纳入比价。</div>
+
+<h2>三、为什么单靠“等级”会出错（实测证据）</h2>
+<div class="card">
+<ul>
+<li><b>同等级≠同质量</b>：内部价表里 200g 面里纸绝大多数挂在优等牛卡（俄卡4660、白面牛卡5100+），但你的箱子实测可用的 重庆理文N级 均值仅环压11.2——按“等级=A级即达标”去选会高估；而 云南东晟A级高瓦 实测反而达一等品——按“等级”会低估。等级只是及格线，真实性能要看实测。</li>
+<li><b>同厂同品也有批次差</b>：重庆理文N级29批环压9.6~12.9，云南东晟A级高瓦13批耐破0.26~1.12（极差4倍），其中2026.9.1批次耐破0.26/环压6.87已低于合格品阈值却仍判“合格”。所以“均值达标”不等于“每批达标”。</li>
+<li><b>正确算法</b>：<code>有效强度 = 实测均值 × 可靠系数k</code>（k按批次CV取0.88~0.97），<code>达标 = 有效强度 ≥ 需求×(1+10%)</code>，<code>单位有效强度成本 = 单价 ÷ 有效环压指数</code>（越低越划算）。这正是本表所用方法。</li>
+</ul>
+</div>
+
+<h2>四、给你的下一步选项</h2>
+<div class="card">
+<ol>
+<li><b>把这份对齐结果回填进工具</b>：将 <code>数据/原纸实测_对齐成本主表.csv</code> 的「内部编码+实测耐破/环压+可靠系数」接入 <code>matching-source.ts</code> 作为 burstIndex/ringCrushIndex 真值，让配纸工具按真实性能而非等级推荐（对应之前方案文档的“阶段1/2”）。</li>
+<li><b>刷新滞后价</b>：内部价表26-5是2026-05旧价（比当前市场低约10%），建议新增「26-10」工作表写入本次市场价，否则成本测算偏低。</li>
+<li><b>补齐验证缺口</b>：更便宜的 理文T级箱板(市场~3180-3230) 等方案在本实测表中<b>无数据</b>，切换前需先纳入来料检测，否则属于“未验证降本”。</li>
+</ol>
+</div>
+
+<p class="small">附：全量对齐主表（含51个实测分组、内部编码、单价、单位有效强度成本、达标判定）已落盘 <code>数据/原纸实测_对齐成本主表.csv</code>。</p>
+</div></body></html>

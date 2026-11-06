@@ -11,6 +11,7 @@ const SESSION_EXPIRED_MESSAGE = "登录状态已过期，请重新登录";
 interface LoginPageProps {
   searchParams?: Promise<{
     reason?: string | string[];
+    next?: string | string[];
   }>;
 }
 
@@ -38,9 +39,22 @@ async function hasExpiredReason(searchParams: LoginPageProps["searchParams"]): P
   return reason === "expired" || (Array.isArray(reason) && reason.includes("expired"));
 }
 
+async function readSafeNextPath(searchParams: LoginPageProps["searchParams"]): Promise<string> {
+  const params = searchParams ? await searchParams : undefined;
+  const next = Array.isArray(params?.next) ? params?.next[0] : params?.next;
+
+  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return "/history";
+  }
+
+  return next;
+}
+
 export default async function LoginPage({ searchParams }: LoginPageProps = {}) {
+  const nextPath = await readSafeNextPath(searchParams);
+
   if (await isAlreadyAuthenticated()) {
-    redirect("/dashboard");
+    redirect(nextPath);
   }
 
   const initialErrorMessage = (await hasExpiredReason(searchParams))
@@ -55,7 +69,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps = {}) {
           <h1 id="login-title">登录</h1>
           <p>请输入已配置的内部账号和密码。</p>
         </div>
-        <LoginForm initialErrorMessage={initialErrorMessage} />
+        <LoginForm initialErrorMessage={initialErrorMessage} nextPath={nextPath} />
       </div>
     </section>
   );

@@ -1,20 +1,16 @@
 import { createDatabaseClient, getDatabaseUrl } from "@/db";
+import { matchingSchemePdfExportTypeLabels } from "@/modules/import-export/matching-scheme-pdf-types";
 import {
-  matchingSchemePdfExportTypeLabels,
+  matchingSchemeExportTypeLabels,
   type MatchingSchemeExportRecord,
-} from "@/modules/import-export/matching-scheme-pdf-types";
+} from "@/modules/import-export/matching-scheme-export-types";
 import {
   createDrizzleMatchingSchemeHistoryRepository,
   listRecentMatchingSchemes,
   type MatchingSchemeHistorySummary,
 } from "@/server/actions/matching-scheme-history";
 
-import { HistoricalOrderImportPanel } from "./_components/historical-order-import-panel";
 import styles from "./history.module.css";
-import {
-  listHistoricalOrderHabitSummaries,
-} from "@/server/actions/historical-order-actions";
-import type { ListHistoricalOrderHabitSummariesResult } from "@/modules/historical-orders/list-habit-summaries";
 
 const finalStatusLabels: Record<string, string> = {
   qualified: "达标 / 可生产",
@@ -26,23 +22,19 @@ const finalStatusLabels: Record<string, string> = {
 
 export default async function HistoryPage() {
   const historyResult = await loadRecentHistory();
-  const habitSummaryResult = await listHistoricalOrderHabitSummaries({ limit: 30 });
 
   return (
     <section className={`page-section ${styles.page}`}>
-      <HistoricalOrderImportPanel />
-
-      <HistoricalOrderHabitSummarySection
-        summaries={habitSummaryResult.ok ? habitSummaryResult.data.items : []}
-        unavailable={!habitSummaryResult.ok}
-      />
-
       <header className={styles.header}>
         <div>
           <h1>历史方案</h1>
           <p>这里保存最近 50 条确认后的配纸方案，最旧记录会自动移出列表。</p>
         </div>
-        {historyResult.ok ? <span className={styles.count}>当前 {historyResult.data.length} 条</span> : null}
+        {historyResult.ok ? (
+          <div className={styles.headerActions}>
+            <span className={styles.count}>当前 {historyResult.data.length} 条</span>
+          </div>
+        ) : null}
       </header>
 
       {!historyResult.ok ? (
@@ -65,8 +57,8 @@ export default async function HistoryPage() {
 
               <dl className={styles.meta}>
                 <div>
-                  <dt>调整状态</dt>
-                  <dd>{item.isManuallyAdjusted ? "用户已手动调整" : "未手动调整"}</dd>
+                  <dt>方案来源</dt>
+                  <dd>系统推荐</dd>
                 </div>
                 <div>
                   <dt>记录编号</dt>
@@ -82,6 +74,16 @@ export default async function HistoryPage() {
                 </ul>
               ) : null}
 
+              {item.selectionReason ? (
+                <section className={styles.selectionReason} aria-label="选型理由">
+                  <div>
+                    <span>选型理由</span>
+                    <strong>{item.selectionReason.sourceLabel}</strong>
+                  </div>
+                  <p>{item.selectionReason.text}</p>
+                </section>
+              ) : null}
+
               {item.finalStatus === "qualified" ? (
                 <div className={styles.exportLinks} aria-label="PDF 导出">
                   <a href={createMatchingSchemePdfExportHref(item.id, "full_report")}>
@@ -90,6 +92,7 @@ export default async function HistoryPage() {
                   <a href={createMatchingSchemePdfExportHref(item.id, "summary_sheet")}>
                     {matchingSchemePdfExportTypeLabels.summary_sheet} PDF
                   </a>
+                  <a href={createMatchingSchemeExcelExportHref(item.id)}>Excel</a>
                 </div>
               ) : null}
 
@@ -108,106 +111,6 @@ export default async function HistoryPage() {
       )}
     </section>
   );
-}
-
-function HistoricalOrderHabitSummarySection({
-  summaries,
-  unavailable,
-}: {
-  summaries: ListHistoricalOrderHabitSummariesResult["items"];
-  unavailable: boolean;
-}) {
-  const productSummaries = summaries.filter((summary) => summary.dimensionType === "product");
-  const sizeSummaries = summaries.filter((summary) => summary.dimensionType === "size_bucket");
-  const weightSummaries = summaries.filter((summary) => summary.dimensionType === "weight_bucket");
-
-  return (
-    <section aria-label="历史配纸习惯摘要" className={styles.habitSummarySection}>
-      <div className={styles.habitSummaryHeading}>
-        <h2>历史配纸习惯摘要</h2>
-        <p>按已确认导入的可统计订单汇总常用组合，仅作为后续经验参考。</p>
-      </div>
-
-      {unavailable ? (
-        <div className={styles.emptyState}>历史配纸习惯摘要暂时无法读取。</div>
-      ) : summaries.length === 0 ? (
-        <div className={styles.emptyState}>暂无历史配纸习惯摘要。</div>
-      ) : (
-        <div className={styles.habitSummaryGrid}>
-          <HabitSummaryGroup title="产品习惯" items={productSummaries} />
-          <HabitSummaryGroup title="尺寸区间习惯" items={sizeSummaries} />
-          <HabitSummaryGroup title="重量区间习惯" items={weightSummaries} />
-        </div>
-      )}
-    </section>
-  );
-}
-
-function HabitSummaryGroup({
-  title,
-  items,
-}: {
-  title: string;
-  items: ListHistoricalOrderHabitSummariesResult["items"];
-}) {
-  return (
-    <section className={styles.habitSummaryGroup}>
-      <h3>{title}</h3>
-      {items.length === 0 ? (
-        <p className={styles.groupEmpty}>暂无记录</p>
-      ) : (
-        <ul className={styles.habitSummaryList}>
-          {items.map((item) => (
-            <li key={`${item.dimensionType}-${item.dimensionKey}-${item.layerCount}-${item.flute}`}>
-              <div className={styles.habitSummaryMain}>
-                <strong>{item.dimensionKey}</strong>
-                <span>{formatHabitCombination(item)}</span>
-              </div>
-              <dl className={styles.habitSummaryMeta}>
-                <div>
-                  <dt>纸厂</dt>
-                  <dd>{item.factoryNames.length > 0 ? item.factoryNames.join(" / ") : "-"}</dd>
-                </div>
-                <div>
-                  <dt>克重</dt>
-                  <dd>{formatGramWeights(item.gramWeights)}</dd>
-                </div>
-                <div>
-                  <dt>次数</dt>
-                  <dd>{item.orderCount} 次</dd>
-                </div>
-                <div>
-                  <dt>频率</dt>
-                  <dd>{formatFrequency(item.frequency)}</dd>
-                </div>
-              </dl>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function formatHabitCombination(
-  item: ListHistoricalOrderHabitSummariesResult["items"][number],
-): string {
-  const layerText = item.layerCount !== undefined ? `${item.layerCount} 层` : "层数未识别";
-  const fluteText = item.flute ? `${item.flute} 瓦` : "瓦型未识别";
-
-  return `${layerText} / ${fluteText}`;
-}
-
-function formatGramWeights(gramWeights: number[]): string {
-  if (gramWeights.length === 0) {
-    return "-";
-  }
-
-  return gramWeights.map((gramWeight) => `${gramWeight}g`).join(" / ");
-}
-
-function formatFrequency(frequency: number): string {
-  return `${Math.round(frequency * 100)}%`;
 }
 
 async function loadRecentHistory() {
@@ -242,7 +145,7 @@ function formatDateTime(date: Date): string {
 }
 
 function formatExportRecord(record: MatchingSchemeExportRecord): string {
-  return `${matchingSchemePdfExportTypeLabels[record.type]} ${formatDateTime(
+  return `${matchingSchemeExportTypeLabels[record.type]} ${formatDateTime(
     new Date(record.exportedAt),
   )}`;
 }
@@ -252,6 +155,10 @@ function createMatchingSchemePdfExportHref(
   type: "full_report" | "summary_sheet",
 ): string {
   return `/api/exports/matching-schemes/${schemeId}?type=${type}`;
+}
+
+function createMatchingSchemeExcelExportHref(schemeId: string): string {
+  return `/api/exports/matching-schemes/${schemeId}/excel`;
 }
 
 function getStatusClassName(finalStatus: MatchingSchemeHistorySummary["finalStatus"]): string {

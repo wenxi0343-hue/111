@@ -19,6 +19,10 @@ function createBoxSpec(overrides: Partial<NormalizedBoxSpec> = {}): NormalizedBo
     productType: "食品",
     productWeightKg: 10,
     arrangement: "single_row",
+    specialRequirements: {
+      dieCutting: false,
+      punctureStrengthRequired: false,
+    },
     productionQuantity: 1000,
     stackingRequirement: {
       status: "not_required",
@@ -369,6 +373,73 @@ describe("calculateStrength", () => {
         expect.objectContaining({ message: expect.stringContaining("边压不足") }),
         expect.objectContaining({ message: expect.stringContaining("耐破不足") }),
       ]),
+    );
+  });
+
+  it("raises the qualification requirement for heavier stacked orders in the same layer count", () => {
+    const candidate = {
+      layers: [
+        createLayer({
+          role: "outer_liner",
+          paper: {
+            id: "paper-1",
+            paperCode: "P1",
+            gramWeightGsm: 150,
+            burstIndex: 2,
+            ringCrushIndex: 10,
+          },
+        }),
+        createLayer({
+          role: "inner_liner",
+          paper: {
+            id: "paper-2",
+            paperCode: "P2",
+            gramWeightGsm: 150,
+            burstIndex: 2,
+            ringCrushIndex: 10,
+          },
+        }),
+        createLayer({
+          role: "corrugating",
+          flute: "B",
+          paper: {
+            id: "paper-3",
+            paperCode: "W1",
+            gramWeightGsm: 120,
+            burstIndex: 2,
+            ringCrushIndex: 7,
+          },
+        }),
+      ],
+    };
+    const lightOrderResult = calculate({
+      boxSpec: {
+        lengthMm: 260,
+        widthMm: 180,
+        heightMm: 120,
+        productWeightKg: 3,
+      },
+      candidate,
+    });
+    const stackedHeavyOrderResult = calculate({
+      boxSpec: {
+        lengthMm: 600,
+        widthMm: 400,
+        heightMm: 350,
+        productWeightKg: 19,
+        stackingRequirement: {
+          status: "required",
+          stackingLayers: 5,
+          displayText: "stacking 5 layers",
+        },
+      },
+      candidate,
+    });
+
+    expect(lightOrderResult.isQualified).toBe(true);
+    expect(stackedHeavyOrderResult.isQualified).toBe(false);
+    expect(stackedHeavyOrderResult.reasons).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "STRENGTH_UNQUALIFIED" })]),
     );
   });
 

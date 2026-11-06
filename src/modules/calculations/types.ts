@@ -88,6 +88,11 @@ export interface StrengthThreshold {
   minEdgeCrushKnPerM: number;
 }
 
+export interface StrengthRequirement extends StrengthThreshold {
+  minBurstStrength: number;
+  demandFactor?: number | undefined;
+}
+
 export interface UtilizationRateRule {
   minQuantity: number;
   rate: number;
@@ -138,6 +143,7 @@ export interface StrengthResult {
   edgeCrushNPerM: number;
   edgeCrushKnPerM: number;
   bctN: number;
+  requirement?: StrengthRequirement | undefined;
   isQualified: boolean;
   reasons: RejectionReason[];
 }

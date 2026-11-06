@@ -2,16 +2,20 @@ import {
   BOX_FORMING_METHODS,
   BOX_SPEC_LIMITS,
   PRODUCT_ARRANGEMENTS,
+  PRODUCT_TYPES,
   STACKING_NOT_REQUIRED_DISPLAY_TEXT,
 } from "./constants";
 import type {
   BoxFormingMethod,
+  BoxSpecialRequirements,
+  BoxSpecialRequirementsInput,
   BoxSpecField,
   BoxSpecFieldError,
   BoxSpecInput,
   BoxSpecValidationResult,
   NormalizedBoxSpec,
   ProductArrangement,
+  ProductType,
   RequiredStackingRequirement,
   StackingRequirement,
 } from "./types";
@@ -20,6 +24,7 @@ export interface ValidateBoxSpecInputOptions {
   supportedStructureTypes?: readonly string[];
   supportedFormingMethods?: readonly BoxFormingMethod[];
   supportedArrangements?: readonly ProductArrangement[];
+  supportedProductTypes?: readonly ProductType[];
 }
 
 interface NumberValidationRule {
@@ -52,36 +57,36 @@ export function validateBoxSpecInput(
 
   const lengthResult = parseRequiredNumber({
     field: "lengthMm",
-    label: "纸箱长度",
+    label: "纸箱内长",
     value: input.lengthMm,
-    requiredMessage: "纸箱长度不能为空",
-    rangeMessage: "纸箱长度允许范围为 100-2000mm",
+    requiredMessage: "纸箱内长不能为空",
+    rangeMessage: "纸箱内长允许范围为 100-2000mm",
     min: BOX_SPEC_LIMITS.lengthMm.min,
     max: BOX_SPEC_LIMITS.lengthMm.max,
     mustBeInteger: true,
-    integerMessage: "纸箱长度必须为整数",
+    integerMessage: "纸箱内长必须为整数",
   });
   const widthResult = parseRequiredNumber({
     field: "widthMm",
-    label: "纸箱宽度",
+    label: "纸箱内宽",
     value: input.widthMm,
-    requiredMessage: "纸箱宽度不能为空",
-    rangeMessage: "纸箱宽度允许范围为 100-1500mm",
+    requiredMessage: "纸箱内宽不能为空",
+    rangeMessage: "纸箱内宽允许范围为 100-1500mm",
     min: BOX_SPEC_LIMITS.widthMm.min,
     max: BOX_SPEC_LIMITS.widthMm.max,
     mustBeInteger: true,
-    integerMessage: "纸箱宽度必须为整数",
+    integerMessage: "纸箱内宽必须为整数",
   });
   const heightResult = parseRequiredNumber({
     field: "heightMm",
-    label: "纸箱高度",
+    label: "纸箱内高",
     value: input.heightMm,
-    requiredMessage: "纸箱高度不能为空",
-    rangeMessage: "纸箱高度允许范围为 100-1500mm",
+    requiredMessage: "纸箱内高不能为空",
+    rangeMessage: "纸箱内高允许范围为 100-1500mm",
     min: BOX_SPEC_LIMITS.heightMm.min,
     max: BOX_SPEC_LIMITS.heightMm.max,
     mustBeInteger: true,
-    integerMessage: "纸箱高度必须为整数",
+    integerMessage: "纸箱内高必须为整数",
   });
   const productWeightResult = parseRequiredNumber({
     field: "productWeightKg",
@@ -130,10 +135,12 @@ export function validateBoxSpecInput(
     options.supportedFormingMethods ?? BOX_FORMING_METHODS,
     "成箱方式不在支持范围内",
   );
-  const productTypeResult = parseRequiredText(
+  const productTypeResult = parseRequiredOption(
     input.productType,
     "productType",
     "产品类型不能为空",
+    options.supportedProductTypes ?? PRODUCT_TYPES,
+    "产品类型不在支持范围内",
   );
   const arrangementResult = parseRequiredOption(
     input.arrangement,
@@ -165,7 +172,7 @@ export function validateBoxSpecInput(
     if (lengthResult.value < widthResult.value) {
       fieldErrors.push({
         field: "lengthMm",
-        message: "纸箱长度必须大于或等于宽度",
+        message: "纸箱内长必须大于或等于内宽",
       });
     } else {
       const lengthWidthRatio = lengthResult.value / widthResult.value;
@@ -176,7 +183,7 @@ export function validateBoxSpecInput(
       ) {
         fieldErrors.push({
           field: "widthMm",
-          message: "纸箱长宽比例必须在 1.0-5.0 之间",
+          message: "纸箱内长内宽比例必须在 1.0-5.0 之间",
         });
       }
     }
@@ -208,7 +215,7 @@ export function validateBoxSpecInput(
     throw new Error("Unexpected validation state");
   }
 
-  const specialRequirements = normalizeOptionalText(input.specialRequirements);
+  const specialRequirements = normalizeSpecialRequirements(input.specialRequirements);
   const normalizedInput: NormalizedBoxSpec = {
     lengthMm: lengthResult.value,
     widthMm: widthResult.value,
@@ -218,7 +225,7 @@ export function validateBoxSpecInput(
     productType: productTypeResult.value,
     productWeightKg: productWeightResult.value,
     arrangement: arrangementResult.value,
-    ...(specialRequirements !== undefined ? { specialRequirements } : {}),
+    specialRequirements,
     productionQuantity: productionQuantityResult.value,
     stackingRequirement: createStackingRequirement(stackingLayersResult.value),
   };
@@ -425,6 +432,29 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
   return normalizedValue ? normalizedValue : undefined;
 }
 
+function normalizeSpecialRequirements(
+  value: BoxSpecInput["specialRequirements"],
+): BoxSpecialRequirements {
+  if (typeof value === "string") {
+    const notes = normalizeOptionalText(value);
+
+    return {
+      dieCutting: false,
+      punctureStrengthRequired: false,
+      ...(notes !== undefined ? { notes } : {}),
+    };
+  }
+
+  const input = value as BoxSpecialRequirementsInput | undefined;
+  const notes = normalizeOptionalText(input?.notes);
+
+  return {
+    dieCutting: input?.dieCutting === true,
+    punctureStrengthRequired: input?.punctureStrengthRequired === true,
+    ...(notes !== undefined ? { notes } : {}),
+  };
+}
+
 function createStackingRequirement(stackingLayers: number | undefined): StackingRequirement {
   if (stackingLayers === undefined) {
     return {
@@ -465,6 +495,7 @@ function pushTextError(
     | { ok: true; value: string }
     | { ok: true; value: BoxFormingMethod }
     | { ok: true; value: ProductArrangement }
+    | { ok: true; value: ProductType }
     | { ok: false; error: BoxSpecFieldError },
 ): void {
   if (!result.ok) {

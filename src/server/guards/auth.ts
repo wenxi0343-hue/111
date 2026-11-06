@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { loadAuthConfig } from "@/modules/auth/config";
 import { AUTH_SESSION_COOKIE_NAME, verifySessionValue } from "@/modules/auth/session";
@@ -17,6 +18,10 @@ interface RequireAuthenticatedActionOptions {
   env?: Record<string, string | undefined>;
   cookieStore?: SessionCookieReader;
   now?: Date;
+}
+
+interface RequireAuthenticatedPageOptions extends RequireAuthenticatedActionOptions {
+  nextPath: string;
 }
 
 const AUTH_REQUIRED_RESULT = {
@@ -66,4 +71,48 @@ export async function requireAuthenticatedAction({
       displayName: sessionResult.data.displayName,
     },
   };
+}
+
+export async function readAuthenticatedUser({
+  env = process.env,
+  cookieStore,
+  now = new Date(),
+}: RequireAuthenticatedActionOptions = {}): Promise<AuthenticatedActionUser | null> {
+  const authOptions: RequireAuthenticatedActionOptions = { env, now };
+
+  if (cookieStore) {
+    authOptions.cookieStore = cookieStore;
+  }
+
+  const authResult = await requireAuthenticatedAction(authOptions);
+
+  return authResult.ok ? authResult.data : null;
+}
+
+export async function requireAuthenticatedPage({
+  env = process.env,
+  cookieStore,
+  now = new Date(),
+  nextPath,
+}: RequireAuthenticatedPageOptions): Promise<void> {
+  const authOptions: RequireAuthenticatedActionOptions = { env, now };
+
+  if (cookieStore) {
+    authOptions.cookieStore = cookieStore;
+  }
+
+  const authResult = await requireAuthenticatedAction(authOptions);
+
+  if (authResult.ok) {
+    return;
+  }
+
+  const params = new URLSearchParams();
+
+  if (authResult.error.code === "SESSION_EXPIRED") {
+    params.set("reason", "expired");
+  }
+
+  params.set("next", nextPath);
+  redirect(`/login?${params.toString()}`);
 }

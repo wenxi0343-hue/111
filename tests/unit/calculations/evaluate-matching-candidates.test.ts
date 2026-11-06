@@ -21,9 +21,13 @@ function createBoxSpec(overrides: Partial<NormalizedBoxSpec> = {}): NormalizedBo
     heightMm: 250,
     structureType: "0201",
     formingMethod: "glue",
-    productType: "food",
+    productType: "食品",
     productWeightKg: 10,
     arrangement: "single_row",
+    specialRequirements: {
+      dieCutting: false,
+      punctureStrengthRequired: false,
+    },
     productionQuantity: 1000,
     stackingRequirement: {
       status: "not_required",

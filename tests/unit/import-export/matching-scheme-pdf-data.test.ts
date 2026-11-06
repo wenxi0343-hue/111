@@ -5,6 +5,8 @@ import type { MatchingSchemePdfData } from "@/modules/import-export/matching-sch
 import { renderMatchingSchemePdfHtml } from "@/modules/import-export/render-matching-scheme-pdf-html";
 import type { MatchingSchemeHistoryRecord } from "@/server/actions/matching-scheme-history";
 
+type RecommendationSlotSnapshot = Record<string, unknown> & { title?: string };
+
 function createHistoryRecord(): MatchingSchemeHistoryRecord {
   const finalSchemeSnapshot = {
     status: "eligible",
@@ -162,6 +164,15 @@ function createHistoryRecord(): MatchingSchemeHistoryRecord {
   };
 }
 
+function createSelectionReason(sourceLabel: "AI 生成" | "模板生成", text: string) {
+  return {
+    source: sourceLabel === "AI 生成" ? "ai" : "template",
+    sourceLabel,
+    text,
+    generatedAt: "2026-07-02T00:00:00.000Z",
+  };
+}
+
 function expectNoInternalCostLeak(data: MatchingSchemePdfData) {
   const serialized = JSON.stringify(data);
 
@@ -260,6 +271,65 @@ describe("matching scheme PDF data", () => {
     expect(html).toContain(longPaperName);
     expect(html).toContain(longReason);
     expect(html).toContain("overflow-wrap: anywhere");
+  });
+
+  it("uses saved structured selection reasons for final and original recommendation conclusions", () => {
+    const record = createHistoryRecord();
+    record.finalSchemeSnapshot = {
+      ...record.finalSchemeSnapshot,
+      selectionReason: createSelectionReason("AI 生成", "保存时的理由"),
+    };
+    record.originalRecommendationSlotsSnapshot = (
+      record.originalRecommendationSlotsSnapshot as RecommendationSlotSnapshot[]
+    ).map((slot, index) => ({
+        ...slot,
+        selectionReason: createSelectionReason(
+          index === 0 ? "AI 生成" : "模板生成",
+          `${slot.title ?? "推荐方案"}保存理由`,
+        ),
+      }));
+
+    const data = buildMatchingSchemePdfData({
+      record,
+      type: "full_report",
+    });
+
+    expect(data.recommendationConclusion).toContain("AI 生成");
+    expect(data.recommendationConclusion).toContain("保存时的理由");
+    expect(data.originalRecommendations[0]?.conclusion).toContain("AI 生成");
+    expect(data.originalRecommendations[0]?.conclusion).toContain("经济型保存理由");
+    expect(data.originalRecommendations[1]?.conclusion).toContain("模板生成");
+    expect(data.originalRecommendations[1]?.conclusion).toContain("安全型保存理由");
+  });
+
+  it("keeps saved selection reason source visible in summary sheet data", () => {
+    const record = createHistoryRecord();
+    record.finalSchemeSnapshot = {
+      ...record.finalSchemeSnapshot,
+      selectionReason: createSelectionReason("AI 生成", "保存时的理由"),
+    };
+
+    const data = buildMatchingSchemePdfData({
+      record,
+      type: "summary_sheet",
+    });
+
+    expect(data.recommendationConclusion).toContain("AI 生成");
+    expect(data.recommendationConclusion).toContain("保存时的理由");
+    expect(data.originalRecommendations).toEqual([]);
+  });
+
+  it("fills old snapshots without selection reason using deterministic template text", () => {
+    const data = buildMatchingSchemePdfData({
+      record: createHistoryRecord(),
+      type: "summary_sheet",
+    });
+
+    expect(data.recommendationConclusion).toContain("成本：该方案含税成本为 2.45 元");
+    expect(data.recommendationConclusion).toContain("强度：空箱抗压 520 N");
+    expect(data.recommendationConclusion).toContain("风险提示：当前未发现强度或设备风险");
+    expect(JSON.stringify(data)).not.toContain("provider_failed");
+    expect(JSON.stringify(data)).not.toContain("AI_PROVIDER");
   });
 
   it("builds summary sheet data without internal cost fields", () => {

@@ -13,6 +13,10 @@ function createBoxSpec(overrides: Partial<NormalizedBoxSpec> = {}): NormalizedBo
     productType: "食品",
     productWeightKg: 10,
     arrangement: "single_row",
+    specialRequirements: {
+      dieCutting: false,
+      punctureStrengthRequired: false,
+    },
     productionQuantity: 1000,
     stackingRequirement: {
       status: "not_required",
@@ -31,16 +35,16 @@ describe("calculateBoardArea", () => {
     });
 
     expect(result).toMatchObject({
-      innerLengthMm: 492,
-      innerWidthMm: 292,
-      innerHeightMm: 242,
+      innerLengthMm: 500,
+      innerWidthMm: 300,
+      innerHeightMm: 250,
       tongueMm: 35,
-      flapMm: 150,
-      boardWidthMm: 548,
-      boardLengthMm: 1625,
+      flapMm: 154,
+      boardWidthMm: 564,
+      boardLengthMm: 1657,
       formingPieces: 1,
     });
-    expect(result.areaSquareMeters).toBeCloseTo(0.8905, 4);
+    expect(result.areaSquareMeters).toBeCloseTo(0.9345, 4);
   });
 
   it("uses the wider three-layer flap rule for C flute", () => {
@@ -50,8 +54,8 @@ describe("calculateBoardArea", () => {
       fluteType: "C",
     });
 
-    expect(result.flapMm).toBe(151);
-    expect(result.boardWidthMm).toBe(550);
+    expect(result.flapMm).toBe(155);
+    expect(result.boardWidthMm).toBe(566);
   });
 
   it("calculates five-layer staple box inner size, tongue, and flap", () => {
@@ -62,13 +66,40 @@ describe("calculateBoardArea", () => {
     });
 
     expect(result).toMatchObject({
-      innerLengthMm: 490,
-      innerWidthMm: 290,
-      innerHeightMm: 240,
+      innerLengthMm: 500,
+      innerWidthMm: 300,
+      innerHeightMm: 250,
       tongueMm: 45,
-      flapMm: 151,
+      flapMm: 156,
+      boardLengthMm: 1669,
+      boardWidthMm: 569,
       formingPieces: 1,
     });
+    expect(result.areaSquareMeters).toBeCloseTo(0.9497, 4);
+  });
+
+  it("calculates the confirmed five-layer BC glue area from inner dimensions", () => {
+    const result = calculateBoardArea({
+      boxSpec: createBoxSpec({
+        lengthMm: 425,
+        widthMm: 335,
+        heightMm: 155,
+      }),
+      layerCount: 5,
+      fluteType: "BC",
+    });
+
+    expect(result).toMatchObject({
+      innerLengthMm: 425,
+      innerWidthMm: 335,
+      innerHeightMm: 155,
+      tongueMm: 40,
+      flapMm: 173.5,
+      boardLengthMm: 1584,
+      boardWidthMm: 509,
+      formingPieces: 1,
+    });
+    expect(result.areaSquareMeters).toBeCloseTo(0.8063, 4);
   });
 
   it("calculates seven-layer box inner size, fixed tongue, and flap", () => {
@@ -83,11 +114,11 @@ describe("calculateBoardArea", () => {
     });
 
     expect(result).toMatchObject({
-      innerLengthMm: 686,
-      innerWidthMm: 386,
-      innerHeightMm: 286,
+      innerLengthMm: 700,
+      innerWidthMm: 400,
+      innerHeightMm: 300,
       tongueMm: 45,
-      flapMm: 201,
+      flapMm: 208,
       formingPieces: 1,
     });
   });

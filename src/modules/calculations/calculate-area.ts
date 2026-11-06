@@ -69,7 +69,7 @@ function getAreaRule({
 }): AreaRule {
   if (layerCount === 3) {
     return {
-      innerReductionMm: 8,
+      innerReductionMm: 0,
       tongueMm: formingMethod === "staple" ? 40 : 35,
       flapExtraMm: fluteType === "C" || fluteType === "BE" ? 10 : 8,
       boardWidthAllowanceMm: 6,
@@ -79,16 +79,16 @@ function getAreaRule({
 
   if (layerCount === 5) {
     return {
-      innerReductionMm: 10,
+      innerReductionMm: 0,
       tongueMm: formingMethod === "staple" ? 45 : 40,
       flapExtraMm: 12,
-      boardWidthAllowanceMm: 8,
-      lengthPanelAllowancesMm: [5, 8, 8, 5],
+      boardWidthAllowanceMm: 7,
+      lengthPanelAllowancesMm: [4, 8, 8, 4],
     };
   }
 
   return {
-    innerReductionMm: 14,
+    innerReductionMm: 0,
     tongueMm: 45,
     flapExtraMm: 16,
     boardWidthAllowanceMm: 10,

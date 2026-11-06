@@ -73,6 +73,8 @@ class InMemoryMatchingSchemeHistoryRepository implements MatchingSchemeHistoryRe
 
     return updatedRecord;
   }
+
+
 }
 
 function createHistoryInput(

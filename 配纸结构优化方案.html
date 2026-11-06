@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>配纸结构优化方案：从"等级优先"到"实测性能优先"</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a2027; --panel2:#222b35; --line:#2e3a47;
+    --txt:#e6edf3; --muted:#9aa7b4; --accent:#4cc9f0; --warn:#ffb454;
+    --good:#5ddб9; --bad:#ff6b6b; --green:#5dd39e; --red:#ff6b6b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--txt);line-height:1.7;padding:32px 20px}
+  .wrap{max-width:1040px;margin:0 auto}
+  h1{font-size:26px;margin-bottom:6px;color:#fff}
+  h2{font-size:19px;margin:32px 0 12px;color:var(--accent);border-left:4px solid var(--accent);padding-left:10px}
+  h3{font-size:15px;margin:18px 0 8px;color:#cfe8f5}
+  p,li{color:var(--txt);font-size:14.5px}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .tag{display:inline-block;font-size:12px;padding:2px 9px;border-radius:20px;margin-right:6px}
+  .tag.bad{background:rgba(255,107,107,.15);color:var(--red);border:1px solid rgba(255,107,107,.4)}
+  .tag.good{background:rgba(93,211,158,.15);color:var(--green);border:1px solid rgba(93,211,158,.4)}
+  .tag.warn{background:rgba(255,180,84,.15);color:var(--warn);border:1px solid rgba(255,180,84,.4)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#cfe8f5;font-weight:600}
+  td code,code{background:#0c1116;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12.5px;color:#ffd479}
+  pre{background:#0c1116;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;font-size:12.5px;color:#d6e2ec;margin:10px 0}
+  .formula{background:var(--panel2);border:1px dashed var(--accent);border-radius:10px;padding:14px 18px;margin:12px 0;font-size:14px}
+  .formula b{color:var(--accent)}
+  .note{background:rgba(76,201,240,.08);border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0;font-size:13.5px;color:#cfe8f5}
+  .kpi{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+  .kpi .box{flex:1;min-width:150px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .kpi .n{font-size:22px;color:var(--accent);font-weight:700}
+  .kpi .l{font-size:12.5px;color:var(--muted)}
+  .step{display:flex;gap:12px;align-items:flex-start;margin:10px 0}
+  .step .num{flex:0 0 30px;height:30px;border-radius:50%;background:var(--accent);color:#05222e;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+  .step .body{flex:1}
+  ul{margin:8px 0 8px 20px}
+  li{margin:4px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>配纸结构优化方案</h1>
+<p class="sub">主题：从「等级优先」转向「实测性能优先」——解决"同等级不同厂家质量不同"的误判问题</p>
+
+<div class="card">
+  <h3>结论速览</h3>
+  <p>当前代码把 <b>纸种 + 等级 + 克重</b> 直接映射成一组<b>固定</b>的耐破/环压指数（如 200g 一等品恒为 3.35 / 12.5），并把"等级"当作物理等效的唯一判据。这在采购真实场景里会制造<b>虚假等效</b>：不同纸厂的同等级纸实际性能、稳定性、适印性差异巨大，却被当成同一张纸。好在 <code>matching-source.ts</code> 早已支持直接读取每条纸的<b>实测</b>指数，只是被设为"可空、空则回退等级值"。修正方向不是重写，而是<b>把实测值设为唯一真值、等级标准降级为校验底线</b>，并补齐质量维度与性价比排序。</p>
+  <div class="kpi">
+    <div class="box"><div class="n">4</div><div class="l">等级优先的固有缺陷</div></div>
+    <div class="box"><div class="n">3 层</div><div class="l">数据 / 计算 / 排序 改造</div></div>
+    <div class="box"><div class="n">+15%</div><div class="l">安全余量建议上限</div></div>
+    <div class="box"><div class="n">3 阶段</div><div class="l">可渐进落地</div></div>
+  </div>
+</div>
+
+<h2>一、为什么"只按等级"不合理</h2>
+
+<div class="grid">
+  <div class="card">
+    <span class="tag bad">缺陷 1</span><b>等级是及格线，不是质量线</b>
+    <p>国标（GB/T 13024 箱板纸、GB/T 13023 瓦楞原纸）给每个等级定的是<b>最低值</b>。大厂一等品常远超底线（如实际 3.6 / 13.0），小厂一等品贴着 3.35 走——工具却给出同一个 3.35。</p>
+  </div>
+  <div class="card">
+    <span class="tag bad">缺陷 2</span><b>同名等级 ≠ 同等实际性能</b>
+    <p>两个"一等品 120g 高瓦"：A 厂实测环压 8.5 且稳定，B 厂 8.4 但批次波动大。当前模型给出同一个 8.4，无视差异。</p>
+  </div>
+  <div class="card">
+    <span class="tag bad">缺陷 3</span><b>单指数覆盖不了真实质量</b>
+    <p>等级标准只管耐破/环压，但纸箱好不好用还取决于<b>水分、紧度、吸水性(Cobb)、层间结合(Scott bond)、挺度、均匀度、与淀粉适配性</b>——都随厂不同，且不在等级里。</p>
+  </div>
+  <div class="card">
+    <span class="tag bad">缺陷 4</span><b>便宜同等级纸可能隐性更贵</b>
+    <p>某厂纸虽同等级更便宜，但批次不稳导致开机废片率高，省下的纸钱被损耗吃掉。等级口径看不到这点。</p>
+  </div>
+</div>
+
+<div class="note">
+<b>关键发现：</b><code>matching-source.ts</code> 第 97–100 行已支持 <code>burstIndex</code>/<code>ringCrushIndex</code> 直接录入，缺失才回退等级值。修正的本质是：<b>实测值优先 + 等级标准当校验底线 + 加质量维度</b>，而不是推翻重来。
+</div>
+
+<h2>二、推荐的修正模型（三层）</h2>
+
+<div class="card">
+<h3>① 数据层 —— 实测优先 + 质量维度</h3>
+<p>给每条原纸增加如下字段，并把"实测指数"设为必填真值：</p>
+<table>
+<tr><th>字段</th><th>含义</th><th>用途</th></tr>
+<tr><td><code>burstIndex</code> / <code>ringCrushIndex</code></td><td>实测耐破/环压指数（取代等级值）</td><td>强度计算真值</td></tr>
+<tr><td><code>reliability</code> (0.85–1.0)</td><td>供应商可靠系数（来料质检历史、批次稳定性、投诉率）</td><td>折算有效强度</td></tr>
+<tr><td><code>cv</code> (批次变异系数)</td><td>该厂该纸实测值的波动幅度</td><td>置信度判定</td></tr>
+<tr><td><code>moisture</code> / <code>cobb</code> / <code>tightness</code></td><td>水分 / 吸水性 / 紧度</td><td>适印、粘结质量参考</td></tr>
+<tr><td><code>measuredAt</code></td><td>实测日期</td><td>数据新鲜度</td></tr>
+<tr><td><code>gradeStandard</code>（仅兜底）</td><td>原等级标准值</td><td>缺失时兜底 + 校验是否达标底线</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>② 计算层 —— 有效强度 + 安全余量</h3>
+<div class="formula">
+<b>有效耐破指数</b> = 实测耐破指数 × 可靠系数 k<br>
+<b>有效环压指数</b> = 实测环压指数 × 可靠系数 k<br>
+<b>达标判定</b> = 有效指数 ≥ 需求指数 × (1 + 安全余量 m)　　（m 建议 8%–15%）
+</div>
+<p>用"有效强度"取代"等级固定值"，厂间真实差异与稳定性被自动计入；安全余量吸收批次波动，避免贴线纸导致批量不达标。</p>
+</div>
+
+<div class="card">
+<h3>③ 排序层 —— 单位强度成本（性价比）</h3>
+<div class="formula">
+<b>每条纸性价比</b> = 有效环压强度贡献 / 吨价　　（越大越划算）<br>
+　其中 环压强度贡献 = 有效环压指数 × 克重<br>
+<b>价值分(均衡型)</b> = 性价比归一化 × w₁ + 安全富余率 × w₂
+</div>
+<p>这直接解决"同等级不同厂质量不同"：不是"谁便宜选谁"，而是<b>每元买到的有效强度最高者胜</b>。便宜但虚标/不稳的纸，因有效强度被可靠系数打折，单位成本反而变高，自然落选。</p>
+</div>
+
+<h2>三、进阶：从"等级达标"升级为"性能达标"</h2>
+<div class="card">
+<p>更严谨的瓦楞工程做法——用各层<b>实测环压</b>算纸板边压 ECT，再用 McKee 公式算空箱抗压 BCT：</p>
+<div class="formula">
+<b>ECT板</b> ≈ Σ 各层(有效环压指数 × 克重) × 系数（面纸直接加、瓦纸乘瓦楞伸长系数）<br>
+<b>BCT</b> = k × ECT<sup>a</sup> × 纸板厚度<sup>b</sup> × 周长<sup>c</sup>　（McKee，常数需按你们设备标定）
+</div>
+<p>这样"需求"来自纸箱真实堆码要求（而非人为选等级），"达标"用真实纸张性能算，天然区分不同纸厂。可作为阶段 3 目标。</p>
+</div>
+
+<h2>四、现有代码结构怎么改</h2>
+
+<div class="card">
+<h3>1. <code>paper-strength-standards.ts</code></h3>
+<p>保留区间表，但语义改为"<b>最低标准/底线</b>"；新增安全余量常量，并暴露"底线"查询仅供校验与兜底。</p>
+<pre>// 现有：resolvePaperStrengthStandard → 直接当真值
+// 改为：
+export const SAFETY_MARGIN = 0.10; // 10%
+export function getMinimumStrengthFloor(kind, grade, gsm) {
+  // 原逻辑，仅用于"缺失兜底"与"校验是否低于国标底线"
+}
+// 不再作为默认真值参与强度计算</pre>
+</div>
+
+<div class="card">
+<h3>2. <code>matching-source.ts</code></h3>
+<p>记录增加质量维度字段；映射时<b>实测优先、缺失才用底线并打低置信</b>，并折算有效强度。</p>
+<pre>interface MatchingSourcePaperMaterialRecord {
+  ...
+  reliability?: number;   // 0.85–1.0
+  cv?: number;            // 批次变异系数
+  moisturePct?: number;
+  cobbG?: number;
+  tightness?: number;
+  measuredAt?: string;
+}
+
+// 映射核心逻辑改为：
+const measuredBurst = readPositiveNumber(record.burstIndex);
+const measuredRing = readPositiveNumber(record.ringCrushIndex);
+const rel = clamp(readNumber(record.reliability) ?? 1.0, 0.85, 1.0);
+
+const burstIndex = measuredBurst ?? floor.burstIndex;   // 缺失才兜底
+const ringCrushIndex = measuredRing ?? floor.ringCrushIndex;
+
+const effectiveBurstIndex = burstIndex * rel;   // 折算有效强度
+const effectiveRingCrushIndex = ringCrushIndex * rel;
+const strengthConfidence = measuredRing ? (rel - cv_penalty) : "low(floor)";</pre>
+</div>
+
+<div class="card">
+<h3>3. <code>calculate-strength.ts</code></h3>
+<p>改用有效指数；达标判定乘安全余量；可由实测值算 ECT/BCT。</p>
+<pre>// 达标判定
+const required = threshold * (1 + SAFETY_MARGIN);
+const ok = effectiveIndex >= required;
+
+// 进阶：ECT/BCT
+const ect = sumLayers(effectiveRingCrushIndex_i * gsm_i * factor_i);</pre>
+</div>
+
+<div class="card">
+<h3>4. 推荐逻辑（推荐策略）</h3>
+<p><b>经济型</b>：由"吨价最低"改为"<b>单位有效强度成本最低</b>"（性价比最高）。<br>
+<b>均衡型</b>：引入<b>价值分</b>（性价比 + 安全富余率）。<br>
+<b>安全型</b>：保持抗压富余率最高，但富余率基于有效强度计算。</p>
+</div>
+
+<h2>五、分阶段落地路线</h2>
+
+<div class="step"><div class="num">1</div><div class="body"><b>阶段 1（最小改动）</b>：把"实测值优先 + 可靠系数×安全余量"接上。立刻消除"同等级等价"误判，不改数据库结构，仅调整映射与判定。预计 0.5–1 天。</div></div>
+<div class="step"><div class="num">2</div><div class="body"><b>阶段 2（数据积累）</b>：维护一张"供应商实测物理指标主表"，由来料质检逐步积累 <code>reliability / cv / moisture / cobb</code>。让工具按真实性能而非等级推荐。</div></div>
+<div class="step"><div class="num">3</div><div class="body"><b>阶段 3（工程算法）</b>：上 ECT/BCT 工程算法 + 性价比自动排序，经济型推荐自动避开"便宜但虚标"的纸。</div></div>
+
+<div class="note">
+<b>落地前必做：</b>无论用等级还是实测值，下单前都向纸厂索要<b>当批耐破/环压质保书</b>并抽样复核；新供应商先小批量试产，用实际废片率反推 <code>reliability</code>。等级标准仍可作为"是否低于国标底线"的红线校验保留。
+</div>
+
+</div>
+</body>
+</html>

@@ -120,7 +120,7 @@ function validateCandidateData(candidate: MatchingCandidate): RejectionReason[] 
     if (!isFiniteNumber(layer.paper.priceYuanPerTon)) {
       reasons.push(createDataMissingReason("PAPER_PRICE_MISSING", `${prefix} 缺少纸价`));
     }
-    if (!isFiniteNumber(layer.paper.burstIndex)) {
+    if (layer.role !== "corrugating" && !isFiniteNumber(layer.paper.burstIndex)) {
       reasons.push(createDataMissingReason("PAPER_BURST_INDEX_MISSING", `${prefix} 缺少耐破指数`));
     }
     if (!isFiniteNumber(layer.paper.ringCrushIndex)) {

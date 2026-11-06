@@ -12,9 +12,13 @@ const REQUIRED_MESSAGE = "请输入账号和密码";
 
 interface LoginFormProps {
   initialErrorMessage?: string | null;
+  nextPath?: string;
 }
 
-export function LoginForm({ initialErrorMessage = null }: LoginFormProps = {}) {
+export function LoginForm({
+  initialErrorMessage = null,
+  nextPath = "/history",
+}: LoginFormProps = {}) {
   const router = useRouter();
   const [errorMessage, setErrorMessage] = useState<string | null>(initialErrorMessage);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,7 +43,7 @@ export function LoginForm({ initialErrorMessage = null }: LoginFormProps = {}) {
       const result = await loginWithPassword({ username, password });
 
       if (result.ok) {
-        router.replace("/dashboard");
+        router.replace(nextPath);
         router.refresh();
         return;
       }

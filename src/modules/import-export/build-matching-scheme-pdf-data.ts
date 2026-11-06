@@ -6,6 +6,8 @@ import type {
   MatchingSchemePdfSchemeDetail,
   MatchingSchemePdfSchemeSummary,
 } from "@/modules/import-export/matching-scheme-pdf-types";
+import { createTemplateSelectionReason } from "@/modules/ai-reasoning/template-reason";
+import type { SelectionReasonFacts } from "@/modules/ai-reasoning/types";
 import type { MatchingSchemeHistoryRecord } from "@/server/actions/matching-scheme-history";
 
 type SnapshotObject = Record<string, unknown>;
@@ -101,7 +103,7 @@ function toRecommendationSummary(value: unknown): MatchingSchemePdfSchemeSummary
     configuration: detail.configuration,
     strength: detail.strength,
     cost: detail.cost,
-    conclusion: createRecommendationConclusion(evaluation),
+    conclusion: createRecommendationConclusion(slot, evaluation),
   };
 }
 
@@ -185,28 +187,128 @@ function toCostRows(snapshot: SnapshotObject): MatchingSchemePdfLabeledValue[] {
   ];
 }
 
-function createRecommendationConclusion(snapshot: SnapshotObject): string {
+function createRecommendationConclusion(
+  snapshot: SnapshotObject,
+  fallbackSnapshot?: SnapshotObject,
+): string {
   const explicitReason =
     getString(snapshot.recommendationReason, "") ||
-    getString(snapshot.selectionReason, "") ||
+    getSelectionReasonText(snapshot.selectionReason) ||
     getString(snapshot.reason, "");
 
   if (explicitReason) {
     return explicitReason;
   }
 
-  const warnings = toArray(snapshot.warningMessages).filter(
-    (item): item is string => typeof item === "string",
-  );
+  const factSnapshot = fallbackSnapshot ?? snapshot;
+  const warnings = toArray(factSnapshot.warningMessages).filter(isString);
 
   if (warnings.length > 0) {
     return warnings.join("；");
   }
 
-  const statusLabel = getStatusLabel(snapshot);
-  const manufacturable = toObject(snapshot.device).isManufacturable === false ? "不可生产" : "可生产";
+  return createTemplateSelectionReason({
+    facts: toSelectionReasonFacts(factSnapshot),
+    now: new Date(0),
+  }).text;
+}
 
-  return `该方案${statusLabel}且${manufacturable}，可作为确认配纸方案。`;
+function getSelectionReasonText(value: unknown): string {
+  const legacyText = getString(value, "");
+
+  if (legacyText) {
+    return legacyText;
+  }
+
+  const reason = toObject(value);
+  const text = getString(reason.text, "");
+
+  if (!text) {
+    return "";
+  }
+
+  const sourceLabel = getString(reason.sourceLabel, "");
+
+  return sourceLabel ? `${sourceLabel}：${text}` : text;
+}
+
+function toSelectionReasonFacts(snapshot: SnapshotObject): SelectionReasonFacts {
+  const candidate = toObject(snapshot.candidate);
+  const cost = toObject(snapshot.cost);
+  const strength = toObject(snapshot.strength);
+  const riskMessages = [
+    ...toArray(snapshot.warningMessages).filter(isString),
+    ...toReasonMessages(toObject(snapshot.device).reasons),
+    ...toReasonMessages(strength.reasons),
+    ...toReasonMessages(snapshot.reasons),
+  ];
+
+  return {
+    strategy: "adjusted",
+    strategyLabel: "调整后方案",
+    isOfficialRecommendation: true,
+    finalStatus: getSelectionReasonFinalStatus(snapshot),
+    layerCount: getNumber(candidate.layerCount, 0),
+    fluteType: getString(candidate.fluteType, ""),
+    paperSummary: toArray(candidate.layers).map((layer) =>
+      getString(toObject(toObject(layer).paper).paperCode, "-"),
+    ),
+    ...(typeof cost.taxIncludedCostYuan === "number"
+      ? {
+          cost: {
+            taxIncludedCostYuan: cost.taxIncludedCostYuan,
+          },
+        }
+      : {}),
+    ...(typeof strength.bctN === "number" &&
+    typeof strength.edgeCrushKnPerM === "number" &&
+    typeof strength.burstStrength === "number"
+      ? {
+          strength: {
+            bctN: strength.bctN,
+            edgeCrushKnPerM: strength.edgeCrushKnPerM,
+            burstStrength: strength.burstStrength,
+          },
+        }
+      : {}),
+    riskMessages,
+    statusMessages: toArray(snapshot.warningMessages).filter(isString),
+  };
+}
+
+function getSelectionReasonFinalStatus(
+  snapshot: SnapshotObject,
+): SelectionReasonFacts["finalStatus"] {
+  const finalStatus = getString(snapshot.finalStatus, "");
+
+  if (
+    finalStatus === "qualified" ||
+    finalStatus === "unqualified" ||
+    finalStatus === "not_manufacturable" ||
+    finalStatus === "data_incomplete"
+  ) {
+    return finalStatus;
+  }
+
+  if (toObject(snapshot.device).isManufacturable === false) {
+    return "not_manufacturable";
+  }
+
+  if (toObject(snapshot.strength).isQualified === false) {
+    return "unqualified";
+  }
+
+  if (getString(snapshot.status, "") === "eligible") {
+    return "qualified";
+  }
+
+  return "data_incomplete";
+}
+
+function toReasonMessages(value: unknown): string[] {
+  return toArray(value)
+    .map((item) => getString(toObject(item).message, ""))
+    .filter((message) => message.length > 0);
 }
 
 function getStatusLabel(snapshot: SnapshotObject): string {
@@ -227,6 +329,14 @@ function toArray(value: unknown): unknown[] {
 
 function getString(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
+}
+
+function getNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }
 
 function formatNumber(value: unknown): string {

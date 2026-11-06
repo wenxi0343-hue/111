@@ -1,19 +1,15 @@
 import type { NormalizedBoxSpec } from "@/modules/box-spec/types";
+import type { SelectionReason } from "@/modules/ai-reasoning/types";
 import type {
   CalculationParameters,
   CandidateEvaluation,
   CandidateLayerRole,
-  FluteType,
-  LayerCount,
   SingleFluteType,
 } from "@/modules/calculations/types";
 import type { RecommendationSlot, RecommendationStrategy } from "@/modules/recommendation/types";
 
 export type MatchingSchemeFinalStatus =
-  | "qualified"
-  | "unqualified"
-  | "not_manufacturable"
-  | "data_incomplete";
+  "qualified" | "unqualified" | "not_manufacturable" | "data_incomplete";
 
 export interface MatchingSchemePriceSnapshot {
   paperMaterialId: string;
@@ -28,31 +24,7 @@ export interface MatchingSchemePriceSnapshot {
   ringCrushIndex?: number | null | undefined;
 }
 
-export interface SchemeAdjustmentLayerInput {
-  role: CandidateLayerRole;
-  flute?: SingleFluteType | undefined;
-  paperMaterialId: string;
-}
-
-export interface SchemeAdjustmentInput {
-  layerCount?: LayerCount | undefined;
-  fluteType?: FluteType | undefined;
-  layers?: SchemeAdjustmentLayerInput[] | undefined;
-}
-
-export interface RecalculateAdjustedSchemeResult {
-  finalEvaluation: CandidateEvaluation;
-  finalStatus: MatchingSchemeFinalStatus;
-  isManuallyAdjusted: boolean;
-  warningMessages: string[];
-  canSave: boolean;
-}
-
-export type OriginalRecommendationSlotsSnapshot = [
-  RecommendationSlot,
-  RecommendationSlot,
-  RecommendationSlot,
-];
+export type OriginalRecommendationSlotsSnapshot = RecommendationSlot[];
 
 export interface MatchingSchemeHistorySnapshot {
   boxSpecSnapshot: NormalizedBoxSpec;
@@ -62,6 +34,7 @@ export interface MatchingSchemeHistorySnapshot {
   finalSchemeSnapshot: CandidateEvaluation & {
     finalStatus: MatchingSchemeFinalStatus;
     warningMessages: string[];
+    selectionReason?: SelectionReason | undefined;
     parameterSnapshot: CalculationParameters;
   };
   finalStatus: MatchingSchemeFinalStatus;

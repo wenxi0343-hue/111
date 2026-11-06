@@ -75,6 +75,8 @@ export function closeDatabaseConnection(pool: { end: () => Promise<void> }) {
   };
 }
 
+export type DrizzleDatabase = ReturnType<typeof createDatabaseClient>["db"];
+
 export async function checkDatabaseConnection(
   options: CheckDatabaseConnectionOptions = {},
 ): Promise<DatabaseConnectionCheckResult> {
