@@ -12,7 +12,7 @@ interface AreaRule {
 }
 
 export function calculateBoardArea(input: {
-  boxSpec: NormalizedBoxSpec;
+  boxSpec: Pick<NormalizedBoxSpec, "lengthMm" | "widthMm" | "heightMm" | "formingMethod">;
   layerCount: LayerCount;
   fluteType: FluteType;
 }): BoardAreaResult {
@@ -67,7 +67,7 @@ function getAreaRule({
   layerCount: LayerCount;
   fluteType: FluteType;
 }): AreaRule {
-  if (layerCount === 3) {
+  if (layerCount === 3 || fluteType === "BE") {
     return {
       innerReductionMm: 0,
       tongueMm: formingMethod === "staple" ? 40 : 35,
@@ -91,8 +91,8 @@ function getAreaRule({
     innerReductionMm: 0,
     tongueMm: 45,
     flapExtraMm: 16,
-    boardWidthAllowanceMm: 10,
-    lengthPanelAllowancesMm: [7, 10, 10, 7],
+    boardWidthAllowanceMm: 9,
+    lengthPanelAllowancesMm: [6, 10, 10, 6],
   };
 }
 

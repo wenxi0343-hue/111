@@ -3,21 +3,12 @@
 import type { ReactNode, SelectHTMLAttributes } from "react";
 import { useState } from "react";
 
-import { Alert, Button, Checkbox, Form, Input } from "antd";
+import { Alert, Button, Form, Input, Switch } from "antd";
 
-import { PRODUCT_TYPES } from "@/modules/box-spec/constants";
-import type { BoxSpecField, BoxSpecFieldError, BoxSpecInput } from "@/modules/box-spec/types";
-import type { RecommendationSlot } from "@/modules/recommendation/types";
-import {
-  generateMatchingScheme,
-  saveConfirmedMatchingScheme,
-  type GenerateMatchingSchemeResult,
-  type SaveConfirmedMatchingSchemeResult,
-} from "@/server/actions/matching-actions";
-import type { ActionResult } from "@/shared/types/action-result";
+import { calculateAreaOptions } from "@/modules/calculations/area-options";
+import type { LayerCount, FluteType } from "@/modules/calculations/types";
 
 import styles from "../matching.module.css";
-import { MatchingResultPanel } from "./matching-result-panel";
 
 interface BoxSpecFormValues {
   lengthMm?: string | undefined;
@@ -38,8 +29,6 @@ interface BoxSpecFormValues {
   productionQuantity?: string | undefined;
   stackingLayers?: string | undefined;
 }
-
-type ActionFailure = Extract<ActionResult<unknown>, { ok: false }>;
 
 interface NativeSelectOption {
   label: ReactNode;
@@ -75,149 +64,61 @@ const initialValues = {
   },
 } satisfies BoxSpecFormValues;
 
-const fieldNames = [
-  "lengthMm",
-  "widthMm",
-  "heightMm",
-  "structureType",
-  "formingMethod",
-  "productType",
-  "productWeightKg",
-  "arrangement",
-  "specialRequirements",
-  "productionQuantity",
-  "stackingLayers",
-] as const satisfies ReadonlyArray<keyof BoxSpecFormValues>;
-
 export function BoxSpecForm() {
   const [form] = Form.useForm<BoxSpecFormValues>();
-  const [baseDataMessage, setBaseDataMessage] = useState<string | null>(null);
-  const [missingItems, setMissingItems] = useState<MatchingDataMissingItem[]>([]);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [matchingResult, setMatchingResult] = useState<GenerateMatchingSchemeResult | null>(null);
-  const [selectedStrategy, setSelectedStrategy] = useState<RecommendationSlot["strategy"] | null>(
-    null,
-  );
-  const [savedResult, setSavedResult] = useState<SaveConfirmedMatchingSchemeResult | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [dimensionType, setDimensionType] = useState<"inner" | "outer">("inner");
+  const [layerCount, setLayerCount] = useState("3");
+  const [printing, setPrinting] = useState("no");
+  const [showPhysicalRequirements, setShowPhysicalRequirements] = useState(false);
+  const [physicalValues, setPhysicalValues] = useState<Record<string, string>>({});
+  const [areaResults, setAreaResults] = useState<
+    { fluteType: FluteType; areaSquareMeters: number }[]
+  >([]);
+  const [error, setError] = useState<string | null>(null);
 
-  async function handleFinish(values: BoxSpecFormValues) {
-    clearMessages();
-    clearFieldErrors();
-    setIsSubmitting(true);
-
-    try {
-      const result = await generateMatchingScheme(toBoxSpecInput(values));
-
-      if (!result.ok) {
-        applyActionError(result);
-        return;
-      }
-
-      setMatchingResult(result.data);
-      setSelectedStrategy(null);
-      setSavedResult(null);
-      setMissingItems([]);
-      setStatusMessage("生成前检查通过");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleSaveConfirmedScheme() {
-    if (!matchingResult || !selectedStrategy) {
-      setBaseDataMessage("请选择一套方案");
+  function handleFinish(values: BoxSpecFormValues) {
+    const result = calculateAreaOptions({
+      lengthMm: values.lengthMm ?? "",
+      widthMm: values.widthMm ?? "",
+      heightMm: values.heightMm ?? "",
+      dimensionType,
+      layerCount: Number(layerCount) as LayerCount,
+      formingMethod: values.formingMethod === "staple" ? "staple" : "glue",
+    });
+    if (!result.ok) {
+      setAreaResults([]);
+      setError(result.message);
       return;
     }
-
-    const selectedSlot = getSelectedSlot(matchingResult, selectedStrategy);
-
-    if (!selectedSlot?.evaluation) {
-      setBaseDataMessage("请先选择可保存的最终方案");
-      return;
-    }
-
-    if (savedResult) {
-      return;
-    }
-
-    setBaseDataMessage(null);
-    setStatusMessage(null);
-    setSavedResult(null);
-    setIsSaving(true);
-
-    try {
-      const result = await saveConfirmedMatchingScheme({
-        boxSpec: toSaveBoxSpecInput(matchingResult.boxSpec),
-        originalRecommendationSlots: matchingResult.recommendationSlots,
-        selectedStrategy,
-        generationToken: matchingResult.generationToken,
-      });
-
-      if (!result.ok) {
-        setBaseDataMessage(result.error.message);
-        return;
-      }
-
-      setSavedResult(result.data);
-      setStatusMessage("保存成功");
-    } finally {
-      setIsSaving(false);
-    }
+    setError(null);
+    setAreaResults(result.results);
   }
 
-  function handleSelectStrategy(strategy: RecommendationSlot["strategy"]) {
-    if (!matchingResult) {
-      return;
-    }
-
-    setSelectedStrategy(strategy);
-    setSavedResult(null);
-    setBaseDataMessage(null);
-    setStatusMessage(null);
+  function clearResults() {
+    setAreaResults([]);
+    setError(null);
   }
 
-  function clearMessages() {
-    setBaseDataMessage(null);
-    setMissingItems([]);
-    setStatusMessage(null);
-    setMatchingResult(null);
-    setSelectedStrategy(null);
-    setSavedResult(null);
-  }
-
-  function clearFieldErrors() {
-    form.setFields(fieldNames.map((name) => ({ name, errors: [] })));
-  }
-
-  function applyActionError(result: ActionFailure) {
-    const fieldErrors = getFieldErrors(result.error.details);
-    const baseDataError = fieldErrors.find((fieldError) => fieldError.field === "baseData");
-    const inputFieldErrors = fieldErrors.filter(isInputFieldError);
-
-    if (inputFieldErrors.length > 0) {
-      form.setFields(
-        inputFieldErrors.map((fieldError) => ({
-          name: fieldError.field,
-          errors: [fieldError.message],
-        })),
+  const areaGroups = areaResults.reduce<{ flutes: FluteType[]; areaSquareMeters: number }[]>(
+    (groups, result) => {
+      const group = groups.find(
+        (item) =>
+          result.fluteType !== "BE" &&
+          !item.flutes.includes("BE") &&
+          item.areaSquareMeters === result.areaSquareMeters,
       );
-    }
-
-    setBaseDataMessage(baseDataError?.message ?? result.error.message);
-    setMissingItems(getMissingItems(result.error.details));
-  }
-
-  const canSaveConfirmedScheme = Boolean(selectedStrategy) && savedResult === null;
+      if (group) group.flutes.push(result.fluteType);
+      else groups.push({ flutes: [result.fluteType], areaSquareMeters: result.areaSquareMeters });
+      return groups;
+    },
+    [],
+  );
 
   return (
     <div className={styles.formPanel}>
       <h2 className={styles.sectionTitle}>纸箱输入</h2>
 
-      {baseDataMessage ? <Alert showIcon title={baseDataMessage} type="error" /> : null}
-      {missingItems.length > 0 ? <MissingItemsPanel items={missingItems} /> : null}
-      {statusMessage ? <Alert showIcon title={statusMessage} type="success" /> : null}
+      {error ? <Alert showIcon title={error} type="error" /> : null}
 
       <Form<BoxSpecFormValues>
         form={form}
@@ -225,22 +126,64 @@ export function BoxSpecForm() {
         layout="vertical"
         name="box-spec-form"
         onFinish={handleFinish}
+        onValuesChange={clearResults}
       >
         <div className={styles.formGrid}>
-          <Form.Item label="纸箱内长（mm）" name="lengthMm">
-            <Input aria-label="纸箱内长（mm）" inputMode="numeric" />
+          <Form.Item label="尺寸类型">
+            <Select
+              aria-label="尺寸类型"
+              value={dimensionType}
+              onChange={(event) => {
+                setDimensionType(event.target.value as "inner" | "outer");
+                clearResults();
+              }}
+              options={[
+                { label: "内径", value: "inner" },
+                { label: "外径", value: "outer" },
+              ]}
+            />
           </Form.Item>
-
-          <Form.Item label="纸箱内宽（mm）" name="widthMm">
-            <Input aria-label="纸箱内宽（mm）" inputMode="numeric" />
+          <Form.Item label="纸箱层数">
+            <Select
+              aria-label="纸箱层数"
+              value={layerCount}
+              onChange={(event) => {
+                setLayerCount(event.target.value);
+                clearResults();
+              }}
+              options={[
+                { label: "三层", value: "3" },
+                { label: "五层", value: "5" },
+                { label: "七层", value: "7" },
+              ]}
+            />
           </Form.Item>
-
-          <Form.Item label="纸箱内高（mm）" name="heightMm">
-            <Input aria-label="纸箱内高（mm）" inputMode="numeric" />
+          <Form.Item
+            label={`纸箱${dimensionType === "inner" ? "内" : "外"}长（mm）`}
+            name="lengthMm"
+          >
+            <Input
+              aria-label={`纸箱${dimensionType === "inner" ? "内" : "外"}长（mm）`}
+              inputMode="numeric"
+            />
           </Form.Item>
-
-          <Form.Item label="纸箱结构类型" name="structureType">
-            <Select aria-label="纸箱结构类型" options={[{ label: "0201 普箱", value: "0201" }]} />
+          <Form.Item
+            label={`纸箱${dimensionType === "inner" ? "内" : "外"}宽（mm）`}
+            name="widthMm"
+          >
+            <Input
+              aria-label={`纸箱${dimensionType === "inner" ? "内" : "外"}宽（mm）`}
+              inputMode="numeric"
+            />
+          </Form.Item>
+          <Form.Item
+            label={`纸箱${dimensionType === "inner" ? "内" : "外"}高（mm）`}
+            name="heightMm"
+          >
+            <Input
+              aria-label={`纸箱${dimensionType === "inner" ? "内" : "外"}高（mm）`}
+              inputMode="numeric"
+            />
           </Form.Item>
 
           <Form.Item label="成箱方式" name="formingMethod">
@@ -253,27 +196,14 @@ export function BoxSpecForm() {
             />
           </Form.Item>
 
-          <Form.Item label="产品类型" name="productType">
+          <Form.Item label="是否印刷">
             <Select
-              aria-label="产品类型"
-              options={PRODUCT_TYPES.map((productType) => ({
-                label: productType,
-                value: productType,
-              }))}
-            />
-          </Form.Item>
-
-          <Form.Item label="内装物重量（kg）" name="productWeightKg">
-            <Input aria-label="内装物重量（kg）" inputMode="decimal" />
-          </Form.Item>
-
-          <Form.Item label="内装物排列方式" name="arrangement">
-            <Select
-              aria-label="内装物排列方式"
+              aria-label="是否印刷"
+              value={printing}
+              onChange={(event) => setPrinting(event.target.value)}
               options={[
-                { label: "单排", value: "single_row" },
-                { label: "双排", value: "double_row" },
-                { label: "交错排列", value: "staggered" },
+                { label: "否", value: "no" },
+                { label: "是", value: "yes" },
               ]}
             />
           </Form.Item>
@@ -282,177 +212,79 @@ export function BoxSpecForm() {
             <Input aria-label="生产数量（个）" inputMode="numeric" />
           </Form.Item>
 
-          <Form.Item label="堆码层数（层）" name="stackingLayers">
-            <Input aria-label="堆码层数（层）" inputMode="numeric" />
-          </Form.Item>
-
           <div className={styles.wideField ?? ""}>
-            <Form.Item label="特殊要求">
-              <div className={styles.specialRequirementGroup}>
-                <Form.Item
-                  name={["specialRequirements", "dieCutting"]}
-                  noStyle
-                  valuePropName="checked"
-                >
-                  <Checkbox aria-label="模切工艺">模切工艺</Checkbox>
-                </Form.Item>
-                <Form.Item
-                  name={["specialRequirements", "punctureStrengthRequired"]}
-                  noStyle
-                  valuePropName="checked"
-                >
-                  <Checkbox aria-label="戳穿强度要求">戳穿强度要求</Checkbox>
-                </Form.Item>
-              </div>
-            </Form.Item>
             <Form.Item label="其他特殊说明" name={["specialRequirements", "notes"]}>
               <Input aria-label="其他特殊说明" />
             </Form.Item>
           </div>
         </div>
 
+        <section className={styles.physicalRequirements}>
+          <div className={styles.physicalHeader}>
+            <div>
+              <h3>物理指标要求</h3>
+              <p>有明确要求时，可展开填写</p>
+            </div>
+            <Switch
+              aria-label="物理指标要求"
+              checked={showPhysicalRequirements}
+              onChange={setShowPhysicalRequirements}
+            />
+          </div>
+          {showPhysicalRequirements ? (
+            <div className={styles.physicalBody}>
+              {[
+                {
+                  title: "重量与堆码",
+                  fields: ["空纸箱重量（kg）", "内装物重量（kg）", "堆码层数（层）"],
+                },
+                { title: "强度要求", fields: ["边压（kN/m）", "耐破", "空箱抗压（N）"] },
+              ].map((group) => (
+                <div key={group.title}>
+                  <h4>{group.title}</h4>
+                  <div className={styles.physicalGrid}>
+                    {group.fields.map((field) => (
+                      <Form.Item key={field} label={field}>
+                        <Input
+                          aria-label={field}
+                          inputMode={field === "堆码层数（层）" ? "numeric" : "decimal"}
+                          value={physicalValues[field] ?? ""}
+                          onChange={(event) =>
+                            setPhysicalValues((previous) => ({
+                              ...previous,
+                              [field]: event.target.value,
+                            }))
+                          }
+                        />
+                      </Form.Item>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
         <div className={styles.actions}>
-          <Button aria-label="生成方案" htmlType="submit" loading={isSubmitting} type="primary">
+          <Button aria-label="生成方案" htmlType="submit" type="primary">
             生成方案
           </Button>
         </div>
       </Form>
 
-      {matchingResult ? (
-        <MatchingResultPanel
-          canSave={canSaveConfirmedScheme}
-          isSaving={isSaving}
-          matchingResult={matchingResult}
-          onSave={handleSaveConfirmedScheme}
-          onSelectStrategy={handleSelectStrategy}
-          savedResult={savedResult}
-          selectedStrategy={selectedStrategy}
-        />
+      {areaResults.length > 0 ? (
+        <section className={styles.resultPanel} aria-label="方案面积">
+          <h3 className={styles.resultTitle}>单箱纸板面积</h3>
+          <ul className={styles.metricList}>
+            {areaGroups.map((result) => (
+              <li key={result.flutes.join("-")}>
+                <strong>{result.flutes.join("、")} 瓦</strong>：{result.areaSquareMeters.toFixed(3)}{" "}
+                m²
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
     </div>
   );
-}
-
-interface MatchingDataMissingItem {
-  scope: "paper_material" | "formula_parameter";
-  code?: string | undefined;
-  name?: string | undefined;
-  field: string;
-  message: string;
-}
-
-function MissingItemsPanel({ items }: { items: MatchingDataMissingItem[] }) {
-  const visibleItems = items.slice(0, 20);
-  const hiddenCount = items.length - visibleItems.length;
-
-  return (
-    <section className={styles.missingDataPanel} aria-label="缺失资料清单">
-      <h3>缺失资料清单</h3>
-      <ul>
-        {visibleItems.map((item, index) => (
-          <li key={`${item.scope}-${item.code ?? item.field}-${index}`}>{item.message}</li>
-        ))}
-      </ul>
-      {hiddenCount > 0 ? <p>还有 {hiddenCount} 项缺失资料，请在后端资料库继续补齐。</p> : null}
-    </section>
-  );
-}
-
-function getSelectedSlot(
-  result: GenerateMatchingSchemeResult,
-  selectedStrategy: RecommendationSlot["strategy"],
-): RecommendationSlot | undefined {
-  return result.recommendationSlots.find((slot) => slot.strategy === selectedStrategy);
-}
-
-function toBoxSpecInput(values: BoxSpecFormValues): BoxSpecInput {
-  return {
-    lengthMm: values.lengthMm,
-    widthMm: values.widthMm,
-    heightMm: values.heightMm,
-    structureType: values.structureType,
-    formingMethod: values.formingMethod,
-    productType: values.productType,
-    productWeightKg: values.productWeightKg,
-    arrangement: values.arrangement,
-    specialRequirements: {
-      dieCutting: values.specialRequirements?.dieCutting === true,
-      punctureStrengthRequired: values.specialRequirements?.punctureStrengthRequired === true,
-      notes: values.specialRequirements?.notes,
-    },
-    productionQuantity: values.productionQuantity,
-    stackingLayers: values.stackingLayers || undefined,
-  };
-}
-
-function toSaveBoxSpecInput(boxSpec: GenerateMatchingSchemeResult["boxSpec"]): BoxSpecInput {
-  return {
-    lengthMm: boxSpec.lengthMm,
-    widthMm: boxSpec.widthMm,
-    heightMm: boxSpec.heightMm,
-    structureType: boxSpec.structureType,
-    formingMethod: boxSpec.formingMethod,
-    productType: boxSpec.productType,
-    productWeightKg: boxSpec.productWeightKg,
-    arrangement: boxSpec.arrangement,
-    specialRequirements: boxSpec.specialRequirements,
-    productionQuantity: boxSpec.productionQuantity,
-    ...(boxSpec.stackingRequirement.status === "required"
-      ? { stackingLayers: boxSpec.stackingRequirement.stackingLayers }
-      : {}),
-  };
-}
-
-function getFieldErrors(details: Record<string, unknown> | undefined): BoxSpecFieldError[] {
-  const fieldErrors = details?.fieldErrors;
-
-  if (!Array.isArray(fieldErrors)) {
-    return [];
-  }
-
-  return fieldErrors.filter(isBoxSpecFieldError);
-}
-
-function getMissingItems(details: Record<string, unknown> | undefined): MatchingDataMissingItem[] {
-  const value = details?.missingItems;
-
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter(isMatchingDataMissingItem);
-}
-
-function isMatchingDataMissingItem(value: unknown): value is MatchingDataMissingItem {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const item = value as Partial<MatchingDataMissingItem>;
-
-  return (
-    (item.scope === "paper_material" || item.scope === "formula_parameter") &&
-    typeof item.field === "string" &&
-    typeof item.message === "string"
-  );
-}
-
-function isBoxSpecFieldError(value: unknown): value is BoxSpecFieldError {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const candidate = value as { field?: unknown; message?: unknown };
-
-  return isBoxSpecField(candidate.field) && typeof candidate.message === "string";
-}
-
-function isInputFieldError(
-  fieldError: BoxSpecFieldError,
-): fieldError is BoxSpecFieldError & { field: keyof BoxSpecFormValues } {
-  return fieldError.field !== "baseData";
-}
-
-function isBoxSpecField(field: unknown): field is BoxSpecField {
-  return typeof field === "string" && (field === "baseData" || fieldNames.includes(field as never));
 }

@@ -573,6 +573,66 @@
   margin-top: 2px;
 }
 
+.physicalRequirements {
+  background: #f5f8fd;
+  border: 1px solid #e3eaf5;
+  border-radius: 12px;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.physicalHeader {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.physicalHeader h3,
+.physicalBody h4 {
+  color: var(--app-text);
+  font-size: 14px;
+  margin: 0;
+}
+
+.physicalHeader p {
+  color: var(--app-muted);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.physicalBody {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.physicalBody h4 {
+  margin-bottom: 10px;
+}
+
+.physicalGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.physicalGrid :global(.ant-form-item) {
+  margin-bottom: 0;
+}
+.physicalGrid :global(.ant-form-item-label) {
+  padding-bottom: 6px;
+}
+.physicalGrid :global(.ant-input) {
+  min-height: 42px;
+}
+
+@media (max-width: 360px) {
+  .physicalGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .actions :global(.ant-btn) {
   border-radius: 10px;
   min-height: 42px;

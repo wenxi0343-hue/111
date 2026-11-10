@@ -27,6 +27,25 @@ function createBoxSpec(overrides: Partial<NormalizedBoxSpec> = {}): NormalizedBo
 }
 
 describe("calculateBoardArea", () => {
+  it("uses the three-layer rule for five-layer BE flute", () => {
+    const result = calculateBoardArea({ boxSpec: createBoxSpec(), layerCount: 5, fluteType: "BE" });
+    expect(result).toMatchObject({
+      tongueMm: 35,
+      flapMm: 155,
+      boardLengthMm: 1657,
+      boardWidthMm: 566,
+    });
+  });
+
+  it("uses the confirmed seven-layer one-piece allowances", () => {
+    const result = calculateBoardArea({
+      boxSpec: createBoxSpec(),
+      layerCount: 7,
+      fluteType: "BAC",
+    });
+    expect(result).toMatchObject({ boardLengthMm: 1677, boardWidthMm: 575, formingPieces: 1 });
+    expect(result.areaSquareMeters).toBeCloseTo(0.964275, 6);
+  });
   it("calculates the three-layer B flute inner size, tongue, flap, board size, and area", () => {
     const result = calculateBoardArea({
       boxSpec: createBoxSpec(),
